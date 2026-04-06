@@ -128,4 +128,17 @@ DE.Game = {
 };
 
 // Boot
-DE.Game.init();
+try {
+    if (typeof THREE === 'undefined') {
+        throw new Error('Three.js failed to load. Check your internet connection.');
+    }
+    DE.Game.init();
+} catch (e) {
+    console.error('Game failed to initialize:', e);
+    var errDiv = document.createElement('div');
+    errDiv.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);color:#f44;font-size:20px;text-align:center;z-index:9999;font-family:sans-serif;';
+    errDiv.innerHTML = 'Failed to load game:<br>' + e.message + '<br><br><small>Check browser console for details</small>';
+    document.body.appendChild(errDiv);
+    var startScreen = document.getElementById('start-screen');
+    if (startScreen) startScreen.style.display = 'none';
+}
