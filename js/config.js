@@ -29,7 +29,7 @@ DE.COLORS = {
 DE.TRAP_TYPES = [
     {
         id: 'stun_bomb', name: 'Stun Bomb', icon: '💥', cost: 25,
-        damage: 1, range: 2.5, cooldown: 3, stunDuration: 2,
+        damage: 1, range: 3.0, cooldown: 3, stunDuration: 2,
         description: 'Area stun', color: 0xffaa00, keyBind: '1'
     },
     {
@@ -38,9 +38,9 @@ DE.TRAP_TYPES = [
         description: 'Damages dinos walking over', color: 0x4a3520, keyBind: '2'
     },
     {
-        id: 'snare_cannon', name: 'Snare Cannon', icon: '🔗', cost: 40,
-        damage: 0, range: 5, cooldown: 5, stunDuration: 3,
-        description: 'Long range root', color: 0x888888, keyBind: '3'
+        id: 'snare_cannon', name: 'Snare Cannon', icon: '🔗', cost: 35,
+        damage: 2, range: 5, cooldown: 4.5, stunDuration: 3,
+        description: 'Long range root + damage', color: 0x888888, keyBind: '3'
     },
     {
         id: 'tranq_dart', name: 'Tranq Dart', icon: '💉', cost: 30,
@@ -49,8 +49,8 @@ DE.TRAP_TYPES = [
         description: 'Damage over time', color: 0x44aadd, keyBind: '4'
     },
     {
-        id: 'electro', name: 'Electro Trap', icon: '⚡', cost: 50,
-        damage: 2, range: 3, cooldown: 4, stunDuration: 1.5,
+        id: 'electro', name: 'Electro Trap', icon: '⚡', cost: 40,
+        damage: 2, range: 3, cooldown: 3.5, stunDuration: 1.5,
         chainRange: 2.5, chainCount: 3,
         description: 'Chain stun', color: 0x44ddff, keyBind: '5'
     },
@@ -66,7 +66,7 @@ DE.DINO_TYPES = {
         scale: 0.5, color: 0xdd8833, bodyType: 'medium'
     },
     velociraptor: {
-        name: 'Velociraptor', hp: 3, speed: 5.5, points: 30, cash: 12,
+        name: 'Velociraptor', hp: 3, speed: 4.2, points: 30, cash: 12,
         scale: 0.4, color: 0xcc3333, bodyType: 'fast'
     },
     triceratops: {

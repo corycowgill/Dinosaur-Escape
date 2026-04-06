@@ -214,6 +214,9 @@ DE.TrapManager = {
                 }
                 if (closest) {
                     DE.DinoManager.applyEffect(closest, 'stun', type.stunDuration);
+                    if (type.damage > 0) {
+                        DE.DinoManager.damageDino(closest, type.damage, DE.Game.state, scene);
+                    }
                     trap.cooldownTimer = type.cooldown;
                     this.showEffect(trap, closest, scene);
                     DE.Audio.playSound('stun');
