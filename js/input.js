@@ -150,23 +150,29 @@ DE.Input = {
 
     setupButtons: function() {
         var self = this;
+        var lastStartTime = 0;
+        var lastRestartTime = 0;
 
-        // Start button
-        document.getElementById('start-btn').addEventListener('click', function() {
-            self.callbacks.onStartGame();
-        });
-        document.getElementById('start-btn').addEventListener('touchend', function(e) {
+        function debounceCall(fn, guardRef) {
+            var now = Date.now();
+            if (now - guardRef.t < 400) return;
+            guardRef.t = now;
+            fn();
+        }
+
+        var startGuard = { t: 0 };
+        var restartGuard = { t: 0 };
+
+        // Start button - single handler works for both click and touch
+        document.getElementById('start-btn').addEventListener('click', function(e) {
             e.preventDefault();
-            self.callbacks.onStartGame();
+            debounceCall(function() { self.callbacks.onStartGame(); }, startGuard);
         });
 
         // Restart button
-        document.getElementById('restart-btn').addEventListener('click', function() {
-            self.callbacks.onRestart();
-        });
-        document.getElementById('restart-btn').addEventListener('touchend', function(e) {
+        document.getElementById('restart-btn').addEventListener('click', function(e) {
             e.preventDefault();
-            self.callbacks.onRestart();
+            debounceCall(function() { self.callbacks.onRestart(); }, restartGuard);
         });
 
         // Trap bar buttons
@@ -176,13 +182,7 @@ DE.Input = {
                 self.callbacks.onSelectTrap(parseInt(btn.dataset.index));
             }
         });
-        document.getElementById('trap-bar').addEventListener('touchend', function(e) {
-            e.preventDefault();
-            var btn = e.target.closest('.trap-btn');
-            if (btn) {
-                self.callbacks.onSelectTrap(parseInt(btn.dataset.index));
-            }
-        });
+        // touchend on trap bar not needed - click fires on touch devices
     },
 
     showMobileControls: function() {

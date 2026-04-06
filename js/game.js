@@ -7,6 +7,9 @@ DE.Game = {
     init: function() {
         var canvas = document.getElementById('game-canvas');
 
+        // Initialize state FIRST so callbacks are safe
+        this.resetState();
+
         // Initialize renderer and scene
         DE.Renderer.init(canvas);
 
@@ -25,9 +28,6 @@ DE.Game = {
             onStartGame: function() { self.start(); },
             onRestart: function() { self.restart(); }
         });
-
-        // Reset state
-        this.resetState();
 
         // Start render loop (but game not active yet)
         this.gameLoop();
@@ -72,7 +72,7 @@ DE.Game = {
         var dt = DE.Renderer.clock.getDelta();
         dt = Math.min(dt, 0.1); // Clamp
 
-        if (this.state.started && !this.state.gameOver && !this.state.paused) {
+        if (this.state && this.state.started && !this.state.gameOver && !this.state.paused) {
             var scene = DE.Renderer.scene;
             var waypoints = DE.Map.getPathWaypoints();
 
@@ -95,7 +95,7 @@ DE.Game = {
     },
 
     onPlace: function(col, row) {
-        if (!this.state.started || this.state.gameOver) return;
+        if (!this.state || !this.state.started || this.state.gameOver) return;
         DE.TrapManager.placeTrap(col, row, DE.Renderer.scene, this.state);
     },
 
@@ -127,18 +127,5 @@ DE.Game = {
     }
 };
 
-// Boot
-try {
-    if (typeof THREE === 'undefined') {
-        throw new Error('Three.js failed to load. Check your internet connection.');
-    }
-    DE.Game.init();
-} catch (e) {
-    console.error('Game failed to initialize:', e);
-    var errDiv = document.createElement('div');
-    errDiv.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);color:#f44;font-size:20px;text-align:center;z-index:9999;font-family:sans-serif;';
-    errDiv.innerHTML = 'Failed to load game:<br>' + e.message + '<br><br><small>Check browser console for details</small>';
-    document.body.appendChild(errDiv);
-    var startScreen = document.getElementById('start-screen');
-    if (startScreen) startScreen.style.display = 'none';
-}
+// Boot - called by the script loader in index.html
+DE.Game.init();

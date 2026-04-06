@@ -186,26 +186,51 @@
         <button class="btn" id="restart-btn">TRY AGAIN</button>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
-        if (typeof THREE === 'undefined') {
-            document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"><\/script>');
+        // Load Three.js with multiple CDN fallbacks
+        function loadScript(url) {
+            return new Promise(function(resolve, reject) {
+                var s = document.createElement('script');
+                s.src = url;
+                s.onload = resolve;
+                s.onerror = reject;
+                document.head.appendChild(s);
+            });
         }
-    </script>
-    <script>
-        if (typeof THREE === 'undefined') {
-            document.write('<script src="https://unpkg.com/three@0.128.0/build/three.min.js"><\/script>');
+        function loadGameScripts() {
+            var scripts = [
+                'js/config.js','js/audio.js','js/renderer.js','js/map.js',
+                'js/hud.js','js/traps.js','js/dinosaurs.js','js/waves.js',
+                'js/input.js','js/game.js'
+            ];
+            var chain = Promise.resolve();
+            scripts.forEach(function(src) {
+                chain = chain.then(function() { return loadScript(src); });
+            });
+            return chain;
         }
+        var cdnUrls = [
+            'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js',
+            'https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js',
+            'https://unpkg.com/three@0.128.0/build/three.min.js'
+        ];
+        (function tryLoad(i) {
+            if (i >= cdnUrls.length) {
+                document.getElementById('start-screen').innerHTML =
+                    '<h1 style="color:#f44">LOAD ERROR</h1>' +
+                    '<p style="color:#ccc;font-size:18px;">Failed to load Three.js from all CDNs.<br>Check your internet connection and refresh.</p>';
+                return;
+            }
+            loadScript(cdnUrls[i]).then(function() {
+                if (typeof THREE !== 'undefined') {
+                    return loadGameScripts();
+                } else {
+                    tryLoad(i + 1);
+                }
+            }).catch(function() {
+                tryLoad(i + 1);
+            });
+        })(0);
     </script>
-    <script src="js/config.js"></script>
-    <script src="js/audio.js"></script>
-    <script src="js/renderer.js"></script>
-    <script src="js/map.js"></script>
-    <script src="js/hud.js"></script>
-    <script src="js/traps.js"></script>
-    <script src="js/dinosaurs.js"></script>
-    <script src="js/waves.js"></script>
-    <script src="js/input.js"></script>
-    <script src="js/game.js"></script>
 </body>
 </html>

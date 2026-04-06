@@ -26,24 +26,24 @@ DE.Map = {
         for (var c = 0; c <= 17; c++) pathCells.push({ r: row, c: c });
         // Turn down
         for (var r2 = 2; r2 <= 3; r2++) pathCells.push({ r: r2, c: 17 });
-        // Segment 2: row 3, col 17 -> 3
+        // Segment 2: row 3, col 16 -> 3 (start at 16 to avoid duplicate at turn)
         row = 3;
-        for (var c = 17; c >= 3; c--) pathCells.push({ r: row, c: c });
+        for (var c = 16; c >= 3; c--) pathCells.push({ r: row, c: c });
         // Turn down
         for (var r2 = 4; r2 <= 5; r2++) pathCells.push({ r: r2, c: 3 });
-        // Segment 3: row 5, col 3 -> 17
+        // Segment 3: row 5, col 4 -> 17 (start at 4 to avoid duplicate at turn)
         row = 5;
-        for (var c = 3; c <= 17; c++) pathCells.push({ r: row, c: c });
+        for (var c = 4; c <= 17; c++) pathCells.push({ r: row, c: c });
         // Turn down
         for (var r2 = 6; r2 <= 7; r2++) pathCells.push({ r: r2, c: 17 });
-        // Segment 4: row 7, col 17 -> 3
+        // Segment 4: row 7, col 16 -> 3 (start at 16 to avoid duplicate at turn)
         row = 7;
-        for (var c = 17; c >= 3; c--) pathCells.push({ r: row, c: c });
+        for (var c = 16; c >= 3; c--) pathCells.push({ r: row, c: c });
         // Turn down
         for (var r2 = 8; r2 <= 9; r2++) pathCells.push({ r: r2, c: 3 });
-        // Segment 5: row 9, col 3 -> 19
+        // Segment 5: row 9, col 4 -> 19 (start at 4 to avoid duplicate at turn)
         row = 9;
-        for (var c = 3; c <= 19; c++) pathCells.push({ r: row, c: c });
+        for (var c = 4; c <= 19; c++) pathCells.push({ r: row, c: c });
 
         // Mark path cells
         for (var i = 0; i < pathCells.length; i++) {
