@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <title>Dinosaur Escape</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            overflow: hidden; background: #000;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: none; -webkit-touch-callout: none;
+            -webkit-user-select: none; user-select: none;
+        }
+        #game-canvas { display: block; touch-action: none; }
+
+        #hud {
+            position: absolute; top: 0; left: 0; right: 0;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 8px 15px; background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%);
+            pointer-events: none; z-index: 10;
+        }
+        .hud-item {
+            color: #fff; font-size: 16px; font-weight: bold;
+            text-shadow: 0 0 10px rgba(0,255,100,0.5);
+        }
+        .hud-item span { color: #4f4; }
+
+        #trap-bar {
+            position: absolute; bottom: 0; left: 0; right: 0;
+            display: flex; justify-content: center; gap: 6px;
+            padding: 8px 10px; background: linear-gradient(0deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 100%);
+            z-index: 10; flex-wrap: wrap;
+        }
+        .trap-btn {
+            display: flex; flex-direction: column; align-items: center;
+            padding: 6px 10px; border: 2px solid #555; border-radius: 8px;
+            background: rgba(30,30,30,0.9); color: #ccc; cursor: pointer;
+            transition: all 0.2s; min-width: 70px; pointer-events: all;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .trap-btn:hover, .trap-btn.selected {
+            border-color: #4f4; color: #fff; background: rgba(0,80,0,0.7);
+            box-shadow: 0 0 15px rgba(0,255,0,0.3);
+        }
+        .trap-btn .icon { font-size: 24px; }
+        .trap-btn .name { font-size: 10px; margin-top: 2px; white-space: nowrap; }
+        .trap-btn .cost { font-size: 11px; color: #fd4; }
+        .trap-btn .key { font-size: 9px; color: #888; margin-top: 2px; }
+
+        #wave-banner {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 42px; color: #f44; font-weight: bold;
+            text-shadow: 0 0 30px rgba(255,0,0,0.8), 0 0 60px rgba(255,0,0,0.4);
+            z-index: 20; pointer-events: none; opacity: 0; transition: opacity 0.5s;
+            text-align: center;
+        }
+
+        #start-screen, #game-over-screen {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.85); z-index: 100; padding: 20px;
+        }
+        #start-screen h1 {
+            font-size: clamp(32px, 10vw, 64px); color: #4f4;
+            text-shadow: 0 0 30px rgba(0,255,0,0.6), 0 0 60px rgba(0,255,0,0.3);
+            margin-bottom: 10px; text-align: center;
+        }
+        #start-screen .subtitle {
+            font-size: clamp(14px, 4vw, 22px); color: #f84; margin-bottom: 30px; text-align: center;
+        }
+        #game-over-screen h1 {
+            font-size: clamp(32px, 10vw, 56px); color: #f44;
+            text-shadow: 0 0 30px rgba(255,0,0,0.6);
+            margin-bottom: 10px;
+        }
+        #game-over-screen .final-score {
+            font-size: clamp(18px, 5vw, 28px); color: #fd4; margin-bottom: 20px;
+        }
+        .btn {
+            padding: 15px 40px; font-size: clamp(16px, 4vw, 22px); border: 2px solid #4f4;
+            border-radius: 10px; background: rgba(0,80,0,0.6); color: #4f4;
+            cursor: pointer; transition: all 0.3s; margin: 5px;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .btn:hover, .btn:focus, .btn:active {
+            background: rgba(0,150,0,0.8); box-shadow: 0 0 20px rgba(0,255,0,0.4);
+        }
+        .controls-info {
+            color: #888; font-size: clamp(11px, 2.5vw, 14px); margin-top: 25px;
+            text-align: center; line-height: 1.8;
+        }
+        .controls-info b { color: #aaa; }
+        #lives-bar { display: flex; gap: 3px; align-items: center; }
+        .life-icon {
+            width: 16px; height: 16px; background: #f44; border-radius: 50%;
+            box-shadow: 0 0 6px rgba(255,0,0,0.6);
+        }
+        .life-icon.lost { background: #333; box-shadow: none; }
+
+        #cursor-indicator {
+            position: absolute; pointer-events: none; z-index: 15;
+            width: 50px; height: 50px; border: 2px solid rgba(0,255,0,0.6);
+            border-radius: 4px; display: none;
+            box-shadow: 0 0 10px rgba(0,255,0,0.3);
+        }
+
+        /* Mobile touch controls */
+        #mobile-dpad {
+            position: absolute; bottom: 100px; left: 20px; z-index: 12;
+            display: none; pointer-events: all;
+        }
+        .dpad-btn {
+            position: absolute; width: 50px; height: 50px;
+            background: rgba(255,255,255,0.15); border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 10px; color: #fff; font-size: 22px;
+            display: flex; align-items: center; justify-content: center;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .dpad-btn:active { background: rgba(0,255,0,0.3); }
+        #dpad-up { left: 55px; top: 0; }
+        #dpad-down { left: 55px; top: 110px; }
+        #dpad-left { left: 0; top: 55px; }
+        #dpad-right { left: 110px; top: 55px; }
+
+        #mobile-place-btn {
+            position: absolute; bottom: 130px; right: 30px; z-index: 12;
+            width: 70px; height: 70px; border-radius: 50%;
+            background: rgba(0,180,0,0.4); border: 3px solid rgba(0,255,0,0.6);
+            color: #4f4; font-size: 14px; font-weight: bold;
+            display: none; align-items: center; justify-content: center;
+            pointer-events: all; -webkit-tap-highlight-color: transparent;
+        }
+        #mobile-place-btn:active { background: rgba(0,255,0,0.6); }
+
+        @media (max-width: 600px) {
+            .hud-item { font-size: 13px; }
+            #hud { padding: 6px 10px; }
+            .trap-btn { min-width: 58px; padding: 5px 6px; }
+            .trap-btn .icon { font-size: 20px; }
+            .trap-btn .name { font-size: 9px; }
+            .trap-btn .cost { font-size: 10px; }
+            .trap-btn .key { display: none; }
+            .life-icon { width: 12px; height: 12px; }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="game-canvas"></canvas>
+
+    <div id="hud" style="display:none;">
+        <div class="hud-item">Score: <span id="score">0</span></div>
+        <div class="hud-item">Wave: <span id="wave-num">1</span></div>
+        <div class="hud-item" id="lives-bar"></div>
+        <div class="hud-item">Cash: $<span id="cash">100</span></div>
+    </div>
+
+    <div id="trap-bar" style="display:none;"></div>
+    <div id="wave-banner"></div>
+    <div id="cursor-indicator"></div>
+
+    <!-- Mobile D-pad for cursor movement -->
+    <div id="mobile-dpad">
+        <div class="dpad-btn" id="dpad-up" data-dir="up">&#9650;</div>
+        <div class="dpad-btn" id="dpad-down" data-dir="down">&#9660;</div>
+        <div class="dpad-btn" id="dpad-left" data-dir="left">&#9664;</div>
+        <div class="dpad-btn" id="dpad-right" data-dir="right">&#9654;</div>
+    </div>
+    <button id="mobile-place-btn" style="display:none;">PLACE</button>
+
+    <div id="start-screen">
+        <h1>DINOSAUR ESCAPE</h1>
+        <div class="subtitle">Stop the dinos before they break free!</div>
+        <button class="btn" id="start-btn">START GAME</button>
+        <div class="controls-info">
+            <b>Mouse/Touch:</b> Tap to place traps<br>
+            <b>Keyboard:</b> 1-5 select traps | WASD move cursor | Space place<br>
+            <b>Xbox Controller:</b> D-pad move | A place | LB/RB cycle traps
+        </div>
+    </div>
+
+    <div id="game-over-screen" style="display:none;">
+        <h1>PARK BREACH!</h1>
+        <div class="final-score">Final Score: <span id="final-score">0</span></div>
+        <div class="final-score" style="font-size:18px; color:#aaa;">Wave reached: <span id="final-wave">1</span></div>
+        <button class="btn" id="restart-btn">TRY AGAIN</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
