@@ -44,11 +44,17 @@ DE.Input = {
             }
         });
 
+        // Scroll wheel: zoom (hold shift to cycle traps)
         this.canvas.addEventListener('wheel', function(e) {
             e.preventDefault();
-            var dir = e.deltaY > 0 ? 1 : -1;
-            var idx = (DE.TrapManager.selectedTrapIndex + dir + DE.TRAP_TYPES.length) % DE.TRAP_TYPES.length;
-            self.callbacks.onSelectTrap(idx);
+            if (e.shiftKey) {
+                var dir = e.deltaY > 0 ? 1 : -1;
+                var idx = (DE.TrapManager.selectedTrapIndex + dir + DE.TRAP_TYPES.length) % DE.TRAP_TYPES.length;
+                self.callbacks.onSelectTrap(idx);
+            } else {
+                var zoomDelta = e.deltaY > 0 ? -0.12 : 0.12;
+                DE.Renderer.zoomIn(zoomDelta);
+            }
         }, { passive: false });
     },
 
@@ -84,6 +90,15 @@ DE.Input = {
                     e.preventDefault();
                     self.callbacks.onPlace(self.cursorGridPos.col, self.cursorGridPos.row);
                     break;
+                case 'q': case 'Q': case '-': case '_':
+                    DE.Renderer.zoomOut();
+                    break;
+                case 'e': case 'E': case '=': case '+':
+                    DE.Renderer.zoomIn();
+                    break;
+                case 'r': case 'R':
+                    DE.Renderer.setZoom(1.0);
+                    break;
             }
 
             if (moved) {
@@ -94,10 +109,21 @@ DE.Input = {
 
     setupTouch: function() {
         var self = this;
+        var lastPinchDist = 0;
+        var isPinching = false;
 
-        // Tap on canvas to place trap
+        // Tap on canvas to place trap, pinch to zoom
         this.canvas.addEventListener('touchstart', function(e) {
+            if (e.touches.length === 2) {
+                isPinching = true;
+                var dx = e.touches[0].clientX - e.touches[1].clientX;
+                var dy = e.touches[0].clientY - e.touches[1].clientY;
+                lastPinchDist = Math.sqrt(dx * dx + dy * dy);
+                e.preventDefault();
+                return;
+            }
             if (!DE.Game.state.started || DE.Game.state.gameOver) return;
+            if (isPinching) return;
             e.preventDefault();
 
             var touch = e.touches[0];
@@ -107,6 +133,27 @@ DE.Input = {
                 self.callbacks.onPlace(grid.col, grid.row);
             }
         }, { passive: false });
+
+        this.canvas.addEventListener('touchmove', function(e) {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                var dx = e.touches[0].clientX - e.touches[1].clientX;
+                var dy = e.touches[0].clientY - e.touches[1].clientY;
+                var dist = Math.sqrt(dx * dx + dy * dy);
+                if (lastPinchDist > 0) {
+                    var delta = (dist - lastPinchDist) * 0.005;
+                    DE.Renderer.zoomIn(delta);
+                }
+                lastPinchDist = dist;
+            }
+        }, { passive: false });
+
+        this.canvas.addEventListener('touchend', function(e) {
+            if (e.touches.length < 2) {
+                isPinching = false;
+                lastPinchDist = 0;
+            }
+        });
 
         // Mobile D-pad
         var dpadBtns = document.querySelectorAll('.dpad-btn');
@@ -275,6 +322,15 @@ DE.Input = {
             var idx = (DE.TrapManager.selectedTrapIndex + 1) % DE.TRAP_TYPES.length;
             this.callbacks.onSelectTrap(idx);
             this.gamepadCooldown = 12;
+        }
+
+        // LT (button 6) - zoom out
+        if (gp.buttons[6] && gp.buttons[6].value > 0.2) {
+            DE.Renderer.zoomOut(gp.buttons[6].value * 0.03);
+        }
+        // RT (button 7) - zoom in
+        if (gp.buttons[7] && gp.buttons[7].value > 0.2) {
+            DE.Renderer.zoomIn(gp.buttons[7].value * 0.03);
         }
 
         if (moved) {

@@ -6,16 +6,25 @@ DE.Renderer = {
     renderer: null,
     clock: null,
     groundPlane: null,
+    zoomLevel: 1.0,
+    minZoom: 0.4,
+    maxZoom: 2.0,
+    targetZoom: 1.0,
+    centerX: 0,
+    centerZ: 0,
 
     init: function(canvas) {
         this.clock = new THREE.Clock();
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x87CEEB); // Sky blue background
+        this.scene.background = new THREE.Color(0x87CEEB);
 
-        // 2.5D isometric-style camera (angled, not straight down)
-        var aspect = window.innerWidth / window.innerHeight;
         var gridW = DE.CONFIG.GRID_COLS * DE.CONFIG.CELL_SIZE;
         var gridH = DE.CONFIG.GRID_ROWS * DE.CONFIG.CELL_SIZE;
+        this.centerX = gridW / 2 - DE.CONFIG.CELL_SIZE;
+        this.centerZ = gridH / 2 - DE.CONFIG.CELL_SIZE;
+
+        // 2.5D isometric-style camera
+        var aspect = window.innerWidth / window.innerHeight;
         var viewSize = Math.max(gridW, gridH) * 0.55;
 
         this.camera = new THREE.OrthographicCamera(
@@ -25,17 +34,14 @@ DE.Renderer = {
         );
 
         // Position camera at an angle for 2.5D look
-        var centerX = gridW / 2 - DE.CONFIG.CELL_SIZE;
-        var centerZ = gridH / 2 - DE.CONFIG.CELL_SIZE;
-        // Camera offset: angled from south, looking north-ish, ~45 degree elevation
         var camDist = DE.CONFIG.CAMERA_HEIGHT;
         var camAngle = Math.PI * 0.28; // ~50 degrees from horizontal
         this.camera.position.set(
-            centerX,
+            this.centerX,
             camDist * Math.sin(camAngle),
-            centerZ + camDist * Math.cos(camAngle)
+            this.centerZ + camDist * Math.cos(camAngle)
         );
-        this.camera.lookAt(centerX, 0, centerZ);
+        this.camera.lookAt(this.centerX, 0, this.centerZ);
 
         // Renderer
         this.renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
@@ -47,7 +53,7 @@ DE.Renderer = {
         // Fog for depth feel
         this.scene.fog = new THREE.Fog(0x87CEEB, 60, 120);
 
-        // Lighting - adjusted for angled view
+        // Lighting
         var ambient = new THREE.AmbientLight(0xffffff, 0.5);
         this.scene.add(ambient);
 
@@ -80,24 +86,46 @@ DE.Renderer = {
         this.resize();
     },
 
-    resize: function() {
+    setZoom: function(level) {
+        this.targetZoom = Math.max(this.minZoom, Math.min(this.maxZoom, level));
+    },
+
+    zoomIn: function(amount) {
+        this.setZoom(this.targetZoom + (amount || 0.15));
+    },
+
+    zoomOut: function(amount) {
+        this.setZoom(this.targetZoom - (amount || 0.15));
+    },
+
+    updateZoom: function() {
+        // Smooth interpolation toward target zoom
+        this.zoomLevel += (this.targetZoom - this.zoomLevel) * 0.12;
+
         var w = window.innerWidth;
         var h = window.innerHeight;
         var aspect = w / h;
         var gridW = DE.CONFIG.GRID_COLS * DE.CONFIG.CELL_SIZE;
         var gridH = DE.CONFIG.GRID_ROWS * DE.CONFIG.CELL_SIZE;
-        var viewSize = Math.max(gridW, gridH) * 0.55;
+        var baseViewSize = Math.max(gridW, gridH) * 0.55;
+        var viewSize = baseViewSize / this.zoomLevel;
 
         this.camera.left = -viewSize * aspect;
         this.camera.right = viewSize * aspect;
         this.camera.top = viewSize;
         this.camera.bottom = -viewSize;
         this.camera.updateProjectionMatrix();
+    },
 
+    resize: function() {
+        var w = window.innerWidth;
+        var h = window.innerHeight;
         this.renderer.setSize(w, h);
+        this.updateZoom();
     },
 
     render: function() {
+        this.updateZoom();
         this.renderer.render(this.scene, this.camera);
     },
 
