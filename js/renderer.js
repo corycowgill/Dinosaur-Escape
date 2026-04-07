@@ -18,11 +18,11 @@ DE.Renderer = {
             -this.baseViewSize * aspect, this.baseViewSize * aspect,
             this.baseViewSize, -this.baseViewSize, 0.1, 200);
 
-        // 2.5D camera - ~63 degrees from horizontal, high enough to see whole board
+        // 2.5D camera - ~45 degrees from horizontal for isometric-style view
         var centerX = gridW / 2 - DE.CONFIG.CELL_SIZE;
         var centerZ = gridH / 2 - DE.CONFIG.CELL_SIZE;
         var camDist = DE.CONFIG.CAMERA_HEIGHT;
-        var camAngle = Math.PI * 0.35;
+        var camAngle = Math.PI * 0.25;
         this.camera.position.set(centerX, camDist * Math.sin(camAngle), centerZ + camDist * Math.cos(camAngle));
         this.camera.lookAt(centerX, 0, centerZ);
 
