@@ -153,6 +153,9 @@
         <div class="hud-item">Wave: <span id="wave-num">1</span></div>
         <div class="hud-item" id="lives-bar"></div>
         <div class="hud-item">Cash: $<span id="cash">100</span></div>
+        <div class="hud-item" style="pointer-events:all;cursor:pointer;" onclick="DE.Game.cycleSpeed(1)" title="Click to change speed">
+            Speed: <span id="speed-display" style="color:#fd4;">1x</span>
+        </div>
     </div>
 
     <div id="trap-bar" style="display:none;"></div>
@@ -173,10 +176,10 @@
         <div class="subtitle">Stop the dinos before they break free!</div>
         <button class="btn" id="start-btn">START GAME</button>
         <div class="controls-info">
-            <b>Mouse:</b> Click place | Scroll zoom | Shift+Scroll cycle traps<br>
+            <b>Mouse:</b> Click place | Shift+Scroll zoom | Scroll cycle traps<br>
             <b>Touch:</b> Tap to place | Pinch to zoom<br>
-            <b>Keyboard:</b> 1-5 traps | WASD move | Space place | Q/E zoom | R reset zoom<br>
-            <b>Xbox:</b> D-pad move | A place | LB/RB traps | LT/RT zoom
+            <b>Keyboard:</b> 1-5 traps | WASD move | Space place | +/- zoom | ,/. speed<br>
+            <b>Xbox:</b> D-pad move | A place | LB/RB traps | Triggers zoom | X speed
         </div>
     </div>
 

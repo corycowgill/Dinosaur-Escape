@@ -3,24 +3,20 @@ window.DE = window.DE || {};
 DE.HUD = {
     bannerTimeout: null,
 
-    updateScore: function(score) {
-        document.getElementById('score').textContent = score;
-    },
+    updateScore: function(score) { document.getElementById('score').textContent = score; },
+    updateWave: function(num) { document.getElementById('wave-num').textContent = num; },
+    updateCash: function(cash) { document.getElementById('cash').textContent = cash; },
 
-    updateWave: function(num) {
-        document.getElementById('wave-num').textContent = num;
-    },
-
-    updateCash: function(cash) {
-        document.getElementById('cash').textContent = cash;
+    updateSpeed: function(speed) {
+        var el = document.getElementById('speed-display');
+        if (el) el.textContent = speed + 'x';
     },
 
     updateLives: function(lives, maxLives) {
         var bar = document.getElementById('lives-bar');
         var html = '<span style="color:#fff;font-weight:bold;margin-right:4px;">Lives:</span>';
-        for (var i = 0; i < maxLives; i++) {
+        for (var i = 0; i < maxLives; i++)
             html += '<div class="life-icon' + (i >= lives ? ' lost' : '') + '"></div>';
-        }
         bar.innerHTML = html;
     },
 
@@ -29,24 +25,16 @@ DE.HUD = {
         banner.textContent = text;
         banner.style.opacity = '1';
         if (this.bannerTimeout) clearTimeout(this.bannerTimeout);
-        this.bannerTimeout = setTimeout(function() {
-            banner.style.opacity = '0';
-        }, 2500);
+        this.bannerTimeout = setTimeout(function() { banner.style.opacity = '0'; }, 2500);
     },
 
-    showStartScreen: function() {
-        document.getElementById('start-screen').style.display = 'flex';
-    },
-
-    hideStartScreen: function() {
-        document.getElementById('start-screen').style.display = 'none';
-    },
+    showStartScreen: function() { document.getElementById('start-screen').style.display = 'flex'; },
+    hideStartScreen: function() { document.getElementById('start-screen').style.display = 'none'; },
 
     showHUD: function() {
         document.getElementById('hud').style.display = 'flex';
         document.getElementById('trap-bar').style.display = 'flex';
     },
-
     hideHUD: function() {
         document.getElementById('hud').style.display = 'none';
         document.getElementById('trap-bar').style.display = 'none';
@@ -57,16 +45,11 @@ DE.HUD = {
         document.getElementById('final-wave').textContent = wave;
         document.getElementById('game-over-screen').style.display = 'flex';
     },
-
-    hideGameOver: function() {
-        document.getElementById('game-over-screen').style.display = 'none';
-    },
+    hideGameOver: function() { document.getElementById('game-over-screen').style.display = 'none'; },
 
     highlightTrapButton: function(index) {
         var btns = document.querySelectorAll('.trap-btn');
-        for (var i = 0; i < btns.length; i++) {
-            btns[i].classList.toggle('selected', i === index);
-        }
+        for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('selected', i === index);
     },
 
     buildTrapBar: function() {
@@ -77,11 +60,8 @@ DE.HUD = {
             var btn = document.createElement('div');
             btn.className = 'trap-btn' + (i === 0 ? ' selected' : '');
             btn.dataset.index = i;
-            btn.innerHTML =
-                '<div class="icon">' + t.icon + '</div>' +
-                '<div class="name">' + t.name + '</div>' +
-                '<div class="cost">$' + t.cost + '</div>' +
-                '<div class="key">[' + t.keyBind + ']</div>';
+            btn.innerHTML = '<div class="icon">' + t.icon + '</div><div class="name">' + t.name +
+                '</div><div class="cost">$' + t.cost + '</div><div class="key">[' + t.keyBind + ']</div>';
             bar.appendChild(btn);
         }
     }

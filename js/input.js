@@ -9,13 +9,14 @@ DE.Input = {
     canvas: null,
     cursorEl: null,
     useGridCursor: false,
+    pinchStartDist: 0,
+    pinchStartZoom: 1,
 
     init: function(canvas, callbacks) {
         this.canvas = canvas;
         this.callbacks = callbacks;
         this.cursorEl = document.getElementById('cursor-indicator');
         this.isMobile = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-
         this.setupMouse();
         this.setupKeyboard();
         this.setupTouch();
@@ -24,36 +25,28 @@ DE.Input = {
 
     setupMouse: function() {
         var self = this;
-
         this.canvas.addEventListener('pointermove', function(e) {
             if (e.pointerType === 'touch') return;
             var world = DE.Renderer.screenToWorld(e.clientX, e.clientY);
-            if (world) {
-                self.hoverGridPos = DE.Map.worldToGrid(world.x, world.z);
-                self.useGridCursor = false;
-            }
+            if (world) { self.hoverGridPos = DE.Map.worldToGrid(world.x, world.z); self.useGridCursor = false; }
         });
-
         this.canvas.addEventListener('pointerdown', function(e) {
             if (e.pointerType === 'touch') return;
-            if (!DE.Game.state.started || DE.Game.state.gameOver) return;
+            if (!DE.Game.state || !DE.Game.state.started || DE.Game.state.gameOver) return;
             var world = DE.Renderer.screenToWorld(e.clientX, e.clientY);
-            if (world) {
-                var grid = DE.Map.worldToGrid(world.x, world.z);
-                self.callbacks.onPlace(grid.col, grid.row);
-            }
+            if (world) { var g = DE.Map.worldToGrid(world.x, world.z); self.callbacks.onPlace(g.col, g.row); }
         });
-
-        // Scroll wheel: zoom (hold shift to cycle traps)
+        // Scroll: zoom (hold shift) or cycle traps
         this.canvas.addEventListener('wheel', function(e) {
             e.preventDefault();
-            if (e.shiftKey) {
+            if (e.shiftKey || e.ctrlKey) {
+                // Zoom
+                var delta = e.deltaY > 0 ? -0.15 : 0.15;
+                DE.Renderer.setZoom(DE.Renderer.zoomLevel + delta);
+            } else {
                 var dir = e.deltaY > 0 ? 1 : -1;
                 var idx = (DE.TrapManager.selectedTrapIndex + dir + DE.TRAP_TYPES.length) % DE.TRAP_TYPES.length;
                 self.callbacks.onSelectTrap(idx);
-            } else {
-                var zoomDelta = e.deltaY > 0 ? -0.12 : 0.12;
-                DE.Renderer.zoomIn(zoomDelta);
             }
         }, { passive: false });
     },
@@ -61,77 +54,54 @@ DE.Input = {
     setupKeyboard: function() {
         var self = this;
         window.addEventListener('keydown', function(e) {
-            if (!DE.Game.state.started || DE.Game.state.gameOver) return;
+            // Speed controls work even in menus
+            if (e.key === ',' || e.key === '<') { DE.Game.cycleSpeed(-1); return; }
+            if (e.key === '.' || e.key === '>') { DE.Game.cycleSpeed(1); return; }
+            // Zoom
+            if (e.key === '=' || e.key === '+') { DE.Renderer.setZoom(DE.Renderer.zoomLevel + 0.2); return; }
+            if (e.key === '-' || e.key === '_') { DE.Renderer.setZoom(DE.Renderer.zoomLevel - 0.2); return; }
 
-            // Trap selection 1-5
+            if (!DE.Game.state || !DE.Game.state.started || DE.Game.state.gameOver) return;
             var num = parseInt(e.key);
-            if (num >= 1 && num <= 5) {
-                self.callbacks.onSelectTrap(num - 1);
-                return;
-            }
+            if (num >= 1 && num <= 5) { self.callbacks.onSelectTrap(num - 1); return; }
 
             self.useGridCursor = true;
             var moved = false;
-
             switch (e.key) {
                 case 'w': case 'W': case 'ArrowUp':
-                    self.cursorGridPos.row = Math.max(0, self.cursorGridPos.row - 1);
-                    moved = true; break;
+                    self.cursorGridPos.row = Math.max(0, self.cursorGridPos.row - 1); moved = true; break;
                 case 's': case 'S': case 'ArrowDown':
-                    self.cursorGridPos.row = Math.min(DE.CONFIG.GRID_ROWS - 1, self.cursorGridPos.row + 1);
-                    moved = true; break;
+                    self.cursorGridPos.row = Math.min(DE.CONFIG.GRID_ROWS - 1, self.cursorGridPos.row + 1); moved = true; break;
                 case 'a': case 'A': case 'ArrowLeft':
-                    self.cursorGridPos.col = Math.max(0, self.cursorGridPos.col - 1);
-                    moved = true; break;
+                    self.cursorGridPos.col = Math.max(0, self.cursorGridPos.col - 1); moved = true; break;
                 case 'd': case 'D': case 'ArrowRight':
-                    self.cursorGridPos.col = Math.min(DE.CONFIG.GRID_COLS - 1, self.cursorGridPos.col + 1);
-                    moved = true; break;
+                    self.cursorGridPos.col = Math.min(DE.CONFIG.GRID_COLS - 1, self.cursorGridPos.col + 1); moved = true; break;
                 case ' ': case 'Enter':
                     e.preventDefault();
-                    self.callbacks.onPlace(self.cursorGridPos.col, self.cursorGridPos.row);
-                    break;
-                case 'q': case 'Q': case '-': case '_':
-                    DE.Renderer.zoomOut();
-                    break;
-                case 'e': case 'E': case '=': case '+':
-                    DE.Renderer.zoomIn();
-                    break;
-                case 'r': case 'R':
-                    DE.Renderer.setZoom(1.0);
-                    break;
+                    self.callbacks.onPlace(self.cursorGridPos.col, self.cursorGridPos.row); break;
             }
-
-            if (moved) {
-                self.updateCursorIndicator(self.cursorGridPos.col, self.cursorGridPos.row);
-            }
+            if (moved) self.updateCursorIndicator(self.cursorGridPos.col, self.cursorGridPos.row);
         });
     },
 
     setupTouch: function() {
         var self = this;
-        var lastPinchDist = 0;
-        var isPinching = false;
-
-        // Tap on canvas to place trap, pinch to zoom
+        // Tap on canvas to place trap / pinch to zoom
         this.canvas.addEventListener('touchstart', function(e) {
             if (e.touches.length === 2) {
-                isPinching = true;
+                // Pinch zoom start
                 var dx = e.touches[0].clientX - e.touches[1].clientX;
                 var dy = e.touches[0].clientY - e.touches[1].clientY;
-                lastPinchDist = Math.sqrt(dx * dx + dy * dy);
+                self.pinchStartDist = Math.sqrt(dx * dx + dy * dy);
+                self.pinchStartZoom = DE.Renderer.zoomLevel;
                 e.preventDefault();
                 return;
             }
-            if (!DE.Game.state.started || DE.Game.state.gameOver) return;
-            if (isPinching) return;
+            if (!DE.Game.state || !DE.Game.state.started || DE.Game.state.gameOver) return;
             e.preventDefault();
-
             var touch = e.touches[0];
             var world = DE.Renderer.screenToWorld(touch.clientX, touch.clientY);
-            if (world) {
-                var grid = DE.Map.worldToGrid(world.x, world.z);
-                self.callbacks.onPlace(grid.col, grid.row);
-            }
+            if (world) { var g = DE.Map.worldToGrid(world.x, world.z); self.callbacks.onPlace(g.col, g.row); }
         }, { passive: false });
 
         this.canvas.addEventListener('touchmove', function(e) {
@@ -140,28 +110,18 @@ DE.Input = {
                 var dx = e.touches[0].clientX - e.touches[1].clientX;
                 var dy = e.touches[0].clientY - e.touches[1].clientY;
                 var dist = Math.sqrt(dx * dx + dy * dy);
-                if (lastPinchDist > 0) {
-                    var delta = (dist - lastPinchDist) * 0.005;
-                    DE.Renderer.zoomIn(delta);
+                if (self.pinchStartDist > 0) {
+                    var scale = dist / self.pinchStartDist;
+                    DE.Renderer.setZoom(self.pinchStartZoom * scale);
                 }
-                lastPinchDist = dist;
             }
         }, { passive: false });
-
-        this.canvas.addEventListener('touchend', function(e) {
-            if (e.touches.length < 2) {
-                isPinching = false;
-                lastPinchDist = 0;
-            }
-        });
 
         // Mobile D-pad
         var dpadBtns = document.querySelectorAll('.dpad-btn');
         for (var i = 0; i < dpadBtns.length; i++) {
             (function(btn) {
-                var dir = btn.dataset.dir;
-                var intervalId = null;
-
+                var dir = btn.dataset.dir, intervalId = null;
                 var move = function() {
                     self.useGridCursor = true;
                     switch (dir) {
@@ -172,64 +132,33 @@ DE.Input = {
                     }
                     self.updateCursorIndicator(self.cursorGridPos.col, self.cursorGridPos.row);
                 };
-
-                btn.addEventListener('touchstart', function(e) {
-                    e.preventDefault();
-                    move();
-                    intervalId = setInterval(move, 200);
-                }, { passive: false });
-
-                btn.addEventListener('touchend', function(e) {
-                    e.preventDefault();
-                    if (intervalId) { clearInterval(intervalId); intervalId = null; }
-                }, { passive: false });
+                btn.addEventListener('touchstart', function(e) { e.preventDefault(); move(); intervalId = setInterval(move, 200); }, { passive: false });
+                btn.addEventListener('touchend', function(e) { e.preventDefault(); if (intervalId) { clearInterval(intervalId); intervalId = null; } }, { passive: false });
             })(dpadBtns[i]);
         }
 
-        // Place button
         var placeBtn = document.getElementById('mobile-place-btn');
         placeBtn.addEventListener('touchstart', function(e) {
             e.preventDefault();
-            if (!DE.Game.state.started || DE.Game.state.gameOver) return;
+            if (!DE.Game.state || !DE.Game.state.started || DE.Game.state.gameOver) return;
             self.callbacks.onPlace(self.cursorGridPos.col, self.cursorGridPos.row);
         }, { passive: false });
     },
 
     setupButtons: function() {
         var self = this;
-        var lastStartTime = 0;
-        var lastRestartTime = 0;
-
-        function debounceCall(fn, guardRef) {
-            var now = Date.now();
-            if (now - guardRef.t < 400) return;
-            guardRef.t = now;
-            fn();
-        }
-
-        var startGuard = { t: 0 };
-        var restartGuard = { t: 0 };
-
-        // Start button - single handler works for both click and touch
+        function debounceCall(fn, guard) { var now = Date.now(); if (now - guard.t < 400) return; guard.t = now; fn(); }
+        var startGuard = { t: 0 }, restartGuard = { t: 0 };
         document.getElementById('start-btn').addEventListener('click', function(e) {
-            e.preventDefault();
-            debounceCall(function() { self.callbacks.onStartGame(); }, startGuard);
+            e.preventDefault(); debounceCall(function() { self.callbacks.onStartGame(); }, startGuard);
         });
-
-        // Restart button
         document.getElementById('restart-btn').addEventListener('click', function(e) {
-            e.preventDefault();
-            debounceCall(function() { self.callbacks.onRestart(); }, restartGuard);
+            e.preventDefault(); debounceCall(function() { self.callbacks.onRestart(); }, restartGuard);
         });
-
-        // Trap bar buttons
         document.getElementById('trap-bar').addEventListener('click', function(e) {
             var btn = e.target.closest('.trap-btn');
-            if (btn) {
-                self.callbacks.onSelectTrap(parseInt(btn.dataset.index));
-            }
+            if (btn) self.callbacks.onSelectTrap(parseInt(btn.dataset.index));
         });
-        // touchend on trap bar not needed - click fires on touch devices
     },
 
     showMobileControls: function() {
@@ -238,7 +167,6 @@ DE.Input = {
             document.getElementById('mobile-place-btn').style.display = 'flex';
         }
     },
-
     hideMobileControls: function() {
         document.getElementById('mobile-dpad').style.display = 'none';
         document.getElementById('mobile-place-btn').style.display = 'none';
@@ -246,17 +174,13 @@ DE.Input = {
 
     updateCursorIndicator: function(col, row) {
         var pos = DE.Map.gridToWorld(col, row);
-        // Project world position to screen
         var vec = new THREE.Vector3(pos.x, 0.2, pos.z);
         vec.project(DE.Renderer.camera);
         var x = (vec.x * 0.5 + 0.5) * window.innerWidth;
         var y = (-vec.y * 0.5 + 0.5) * window.innerHeight;
-
         this.cursorEl.style.display = 'block';
         this.cursorEl.style.left = (x - 25) + 'px';
         this.cursorEl.style.top = (y - 25) + 'px';
-
-        // Color based on whether placement is valid
         var canPlace = DE.Map.canPlaceTrap(col, row);
         this.cursorEl.style.borderColor = canPlace ? 'rgba(0,255,0,0.6)' : 'rgba(255,0,0,0.6)';
         this.cursorEl.style.boxShadow = canPlace ? '0 0 10px rgba(0,255,0,0.3)' : '0 0 10px rgba(255,0,0,0.3)';
@@ -265,84 +189,29 @@ DE.Input = {
     pollGamepad: function() {
         var gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
         var gp = null;
-        for (var i = 0; i < gamepads.length; i++) {
-            if (gamepads[i]) { gp = gamepads[i]; break; }
-        }
-        if (!gp) return;
-        if (!DE.Game.state.started || DE.Game.state.gameOver) return;
+        for (var i = 0; i < gamepads.length; i++) if (gamepads[i]) { gp = gamepads[i]; break; }
+        if (!gp || !DE.Game.state || !DE.Game.state.started || DE.Game.state.gameOver) return;
 
         this.gamepadCooldown = Math.max(0, this.gamepadCooldown - 1);
         if (this.gamepadCooldown > 0) return;
-
         this.useGridCursor = true;
         var moved = false;
+        var lx = gp.axes[0] || 0, ly = gp.axes[1] || 0, dz = 0.4;
 
-        // D-pad or left stick
-        var lx = gp.axes[0] || 0;
-        var ly = gp.axes[1] || 0;
-        var deadzone = 0.4;
+        if ((gp.buttons[12] && gp.buttons[12].pressed) || ly < -dz) { this.cursorGridPos.row = Math.max(0, this.cursorGridPos.row - 1); moved = true; }
+        if ((gp.buttons[13] && gp.buttons[13].pressed) || ly > dz) { this.cursorGridPos.row = Math.min(DE.CONFIG.GRID_ROWS - 1, this.cursorGridPos.row + 1); moved = true; }
+        if ((gp.buttons[14] && gp.buttons[14].pressed) || lx < -dz) { this.cursorGridPos.col = Math.max(0, this.cursorGridPos.col - 1); moved = true; }
+        if ((gp.buttons[15] && gp.buttons[15].pressed) || lx > dz) { this.cursorGridPos.col = Math.min(DE.CONFIG.GRID_COLS - 1, this.cursorGridPos.col + 1); moved = true; }
 
-        var up = gp.buttons[12] && gp.buttons[12].pressed;
-        var down = gp.buttons[13] && gp.buttons[13].pressed;
-        var left = gp.buttons[14] && gp.buttons[14].pressed;
-        var right = gp.buttons[15] && gp.buttons[15].pressed;
+        if (gp.buttons[0] && gp.buttons[0].pressed) { this.callbacks.onPlace(this.cursorGridPos.col, this.cursorGridPos.row); this.gamepadCooldown = 12; }
+        if (gp.buttons[4] && gp.buttons[4].pressed) { this.callbacks.onSelectTrap((DE.TrapManager.selectedTrapIndex - 1 + DE.TRAP_TYPES.length) % DE.TRAP_TYPES.length); this.gamepadCooldown = 12; }
+        if (gp.buttons[5] && gp.buttons[5].pressed) { this.callbacks.onSelectTrap((DE.TrapManager.selectedTrapIndex + 1) % DE.TRAP_TYPES.length); this.gamepadCooldown = 12; }
+        // Right trigger = zoom in, Left trigger = zoom out
+        if (gp.buttons[7] && gp.buttons[7].value > 0.2) DE.Renderer.setZoom(DE.Renderer.zoomLevel + 0.03);
+        if (gp.buttons[6] && gp.buttons[6].value > 0.2) DE.Renderer.setZoom(DE.Renderer.zoomLevel - 0.03);
+        // X button = cycle speed
+        if (gp.buttons[2] && gp.buttons[2].pressed) { DE.Game.cycleSpeed(1); this.gamepadCooldown = 15; }
 
-        if (up || ly < -deadzone) {
-            this.cursorGridPos.row = Math.max(0, this.cursorGridPos.row - 1);
-            moved = true;
-        }
-        if (down || ly > deadzone) {
-            this.cursorGridPos.row = Math.min(DE.CONFIG.GRID_ROWS - 1, this.cursorGridPos.row + 1);
-            moved = true;
-        }
-        if (left || lx < -deadzone) {
-            this.cursorGridPos.col = Math.max(0, this.cursorGridPos.col - 1);
-            moved = true;
-        }
-        if (right || lx > deadzone) {
-            this.cursorGridPos.col = Math.min(DE.CONFIG.GRID_COLS - 1, this.cursorGridPos.col + 1);
-            moved = true;
-        }
-
-        // A button (button 0) - place trap
-        if (gp.buttons[0] && gp.buttons[0].pressed) {
-            this.callbacks.onPlace(this.cursorGridPos.col, this.cursorGridPos.row);
-            this.gamepadCooldown = 12;
-        }
-
-        // LB (button 4) - previous trap
-        if (gp.buttons[4] && gp.buttons[4].pressed) {
-            var idx = (DE.TrapManager.selectedTrapIndex - 1 + DE.TRAP_TYPES.length) % DE.TRAP_TYPES.length;
-            this.callbacks.onSelectTrap(idx);
-            this.gamepadCooldown = 12;
-        }
-
-        // RB (button 5) - next trap
-        if (gp.buttons[5] && gp.buttons[5].pressed) {
-            var idx = (DE.TrapManager.selectedTrapIndex + 1) % DE.TRAP_TYPES.length;
-            this.callbacks.onSelectTrap(idx);
-            this.gamepadCooldown = 12;
-        }
-
-        // LT (button 6) - zoom out
-        if (gp.buttons[6] && gp.buttons[6].value > 0.2) {
-            DE.Renderer.zoomOut(gp.buttons[6].value * 0.03);
-        }
-        // RT (button 7) - zoom in
-        if (gp.buttons[7] && gp.buttons[7].value > 0.2) {
-            DE.Renderer.zoomIn(gp.buttons[7].value * 0.03);
-        }
-
-        if (moved) {
-            this.gamepadCooldown = 8;
-            this.updateCursorIndicator(this.cursorGridPos.col, this.cursorGridPos.row);
-        }
-    },
-
-    getActiveGridPos: function() {
-        if (this.useGridCursor) {
-            return this.cursorGridPos;
-        }
-        return this.hoverGridPos;
+        if (moved) { this.gamepadCooldown = 8; this.updateCursorIndicator(this.cursorGridPos.col, this.cursorGridPos.row); }
     }
 };

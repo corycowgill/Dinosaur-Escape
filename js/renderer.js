@@ -1,85 +1,51 @@
 window.DE = window.DE || {};
 
 DE.Renderer = {
-    scene: null,
-    camera: null,
-    renderer: null,
-    clock: null,
-    groundPlane: null,
-    zoomLevel: 1.0,
-    minZoom: 0.4,
-    maxZoom: 2.0,
-    targetZoom: 1.0,
-    centerX: 0,
-    centerZ: 0,
+    scene: null, camera: null, renderer: null, clock: null, groundPlane: null,
+    zoomLevel: 1.0, minZoom: 0.4, maxZoom: 2.5, baseViewSize: 0,
 
     init: function(canvas) {
         this.clock = new THREE.Clock();
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x87CEEB);
 
+        var aspect = window.innerWidth / window.innerHeight;
         var gridW = DE.CONFIG.GRID_COLS * DE.CONFIG.CELL_SIZE;
         var gridH = DE.CONFIG.GRID_ROWS * DE.CONFIG.CELL_SIZE;
-        this.centerX = gridW / 2 - DE.CONFIG.CELL_SIZE;
-        this.centerZ = gridH / 2 - DE.CONFIG.CELL_SIZE;
-
-        // 2.5D isometric-style camera
-        var aspect = window.innerWidth / window.innerHeight;
-        var viewSize = Math.max(gridW, gridH) * 0.55;
+        this.baseViewSize = Math.max(gridW, gridH) * 0.55;
 
         this.camera = new THREE.OrthographicCamera(
-            -viewSize * aspect, viewSize * aspect,
-            viewSize, -viewSize,
-            0.1, 200
-        );
+            -this.baseViewSize * aspect, this.baseViewSize * aspect,
+            this.baseViewSize, -this.baseViewSize, 0.1, 200);
 
-        // Position camera at an angle for 2.5D look
+        // 2.5D camera - ~63 degrees from horizontal, high enough to see whole board
+        var centerX = gridW / 2 - DE.CONFIG.CELL_SIZE;
+        var centerZ = gridH / 2 - DE.CONFIG.CELL_SIZE;
         var camDist = DE.CONFIG.CAMERA_HEIGHT;
-        var camAngle = Math.PI * 0.28; // ~50 degrees from horizontal
-        this.camera.position.set(
-            this.centerX,
-            camDist * Math.sin(camAngle),
-            this.centerZ + camDist * Math.cos(camAngle)
-        );
-        this.camera.lookAt(this.centerX, 0, this.centerZ);
+        var camAngle = Math.PI * 0.35;
+        this.camera.position.set(centerX, camDist * Math.sin(camAngle), centerZ + camDist * Math.cos(camAngle));
+        this.camera.lookAt(centerX, 0, centerZ);
 
-        // Renderer
         this.renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-        // Fog for depth feel
-        this.scene.fog = new THREE.Fog(0x87CEEB, 60, 120);
+        this.scene.fog = new THREE.Fog(0x87CEEB, 80, 150);
 
-        // Lighting
-        var ambient = new THREE.AmbientLight(0xffffff, 0.5);
-        this.scene.add(ambient);
-
+        this.scene.add(new THREE.AmbientLight(0xffffff, 0.5));
         var sun = new THREE.DirectionalLight(0xfff5e0, 0.9);
-        sun.position.set(15, 30, 20);
-        sun.castShadow = true;
-        sun.shadow.mapSize.width = 2048;
-        sun.shadow.mapSize.height = 2048;
-        sun.shadow.camera.near = 0.5;
-        sun.shadow.camera.far = 80;
-        sun.shadow.camera.left = -40;
-        sun.shadow.camera.right = 40;
-        sun.shadow.camera.top = 40;
-        sun.shadow.camera.bottom = -40;
+        sun.position.set(15, 30, 20); sun.castShadow = true;
+        sun.shadow.mapSize.width = 2048; sun.shadow.mapSize.height = 2048;
+        sun.shadow.camera.near = 0.5; sun.shadow.camera.far = 80;
+        sun.shadow.camera.left = -40; sun.shadow.camera.right = 40;
+        sun.shadow.camera.top = 40; sun.shadow.camera.bottom = -40;
         this.scene.add(sun);
+        this.scene.add(new THREE.HemisphereLight(0x88bbff, 0x445522, 0.3));
 
-        // Hemisphere light for sky/ground color bleed
-        var hemi = new THREE.HemisphereLight(0x88bbff, 0x445522, 0.3);
-        this.scene.add(hemi);
-
-        // Invisible ground plane for raycasting
-        var planeGeo = new THREE.PlaneGeometry(200, 200);
-        var planeMat = new THREE.MeshBasicMaterial({ visible: false });
-        this.groundPlane = new THREE.Mesh(planeGeo, planeMat);
+        this.groundPlane = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshBasicMaterial({ visible: false }));
         this.groundPlane.rotation.x = -Math.PI / 2;
-        this.groundPlane.position.y = 0;
         this.scene.add(this.groundPlane);
 
         window.addEventListener('resize', this.resize.bind(this));
@@ -87,59 +53,30 @@ DE.Renderer = {
     },
 
     setZoom: function(level) {
-        this.targetZoom = Math.max(this.minZoom, Math.min(this.maxZoom, level));
+        this.zoomLevel = Math.max(this.minZoom, Math.min(this.maxZoom, level));
+        this.applyZoom();
     },
 
-    zoomIn: function(amount) {
-        this.setZoom(this.targetZoom + (amount || 0.15));
-    },
-
-    zoomOut: function(amount) {
-        this.setZoom(this.targetZoom - (amount || 0.15));
-    },
-
-    updateZoom: function() {
-        // Smooth interpolation toward target zoom
-        this.zoomLevel += (this.targetZoom - this.zoomLevel) * 0.12;
-
-        var w = window.innerWidth;
-        var h = window.innerHeight;
-        var aspect = w / h;
-        var gridW = DE.CONFIG.GRID_COLS * DE.CONFIG.CELL_SIZE;
-        var gridH = DE.CONFIG.GRID_ROWS * DE.CONFIG.CELL_SIZE;
-        var baseViewSize = Math.max(gridW, gridH) * 0.55;
-        var viewSize = baseViewSize / this.zoomLevel;
-
-        this.camera.left = -viewSize * aspect;
-        this.camera.right = viewSize * aspect;
-        this.camera.top = viewSize;
-        this.camera.bottom = -viewSize;
+    applyZoom: function() {
+        var aspect = window.innerWidth / window.innerHeight;
+        var vs = this.baseViewSize / this.zoomLevel;
+        this.camera.left = -vs * aspect; this.camera.right = vs * aspect;
+        this.camera.top = vs; this.camera.bottom = -vs;
         this.camera.updateProjectionMatrix();
     },
 
     resize: function() {
-        var w = window.innerWidth;
-        var h = window.innerHeight;
-        this.renderer.setSize(w, h);
-        this.updateZoom();
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.applyZoom();
     },
 
-    render: function() {
-        this.updateZoom();
-        this.renderer.render(this.scene, this.camera);
-    },
+    render: function() { this.renderer.render(this.scene, this.camera); },
 
     screenToWorld: function(screenX, screenY) {
-        var raycaster = new THREE.Raycaster();
-        var mouse = new THREE.Vector2();
-        mouse.x = (screenX / window.innerWidth) * 2 - 1;
-        mouse.y = -(screenY / window.innerHeight) * 2 + 1;
-        raycaster.setFromCamera(mouse, this.camera);
-
-        var intersects = raycaster.intersectObject(this.groundPlane);
-        if (intersects.length > 0) {
-            return { x: intersects[0].point.x, z: intersects[0].point.z };
-        }
-        return null;
+        var rc = new THREE.Raycaster();
+        var m = new THREE.Vector2((screenX / window.innerWidth) * 2 - 1, -(screenY / window.innerHeight) * 2 + 1);
+        rc.setFromCamera(m, this.camera);
+        var hits = rc.intersectObject(this.groundPlane);
+        return hits.length > 0 ? { x: hits[0].point.x, z: hits[0].point.z } : null;
     }
 };

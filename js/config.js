@@ -80,18 +80,34 @@ DE.DINO_TYPES = {
 };
 
 DE.WAVE_TEMPLATES = [
-    // Wave 1-3: easy
+    // Wave 1: tutorial - tiny swarm
     [{ type: 'compy', count: 5, delay: 1.5 }],
+    // Wave 2: more compies
     [{ type: 'compy', count: 8, delay: 1.2 }],
-    [{ type: 'compy', count: 6, delay: 1.2 }, { type: 'dilophosaurus', count: 2, delay: 2 }],
-    // Wave 4-6: introducing more types
-    [{ type: 'compy', count: 5, delay: 1 }, { type: 'velociraptor', count: 3, delay: 1 }],
-    [{ type: 'dilophosaurus', count: 5, delay: 1.5 }, { type: 'velociraptor', count: 3, delay: 0.8 }],
-    [{ type: 'compy', count: 8, delay: 0.8 }, { type: 'dilophosaurus', count: 4, delay: 1.5 }, { type: 'triceratops', count: 1, delay: 3 }],
-    // Wave 7-9: harder
-    [{ type: 'velociraptor', count: 6, delay: 0.7 }, { type: 'triceratops', count: 2, delay: 2.5 }],
-    [{ type: 'dilophosaurus', count: 6, delay: 1 }, { type: 'triceratops', count: 3, delay: 2 }, { type: 'velociraptor', count: 4, delay: 0.6 }],
-    [{ type: 'compy', count: 10, delay: 0.5 }, { type: 'triceratops', count: 3, delay: 2 }, { type: 'velociraptor', count: 5, delay: 0.7 }],
-    // Wave 10: first boss
-    [{ type: 'dilophosaurus', count: 5, delay: 1 }, { type: 'triceratops', count: 3, delay: 2 }, { type: 'trex', count: 1, delay: 4 }],
+    // Wave 3: introduce dilophosaurus
+    [{ type: 'compy', count: 6, delay: 1.2 }, { type: 'dilophosaurus', count: 2, delay: 2.5 }],
+    // Wave 4: warm-up raptors (just 2 mixed with compies)
+    [{ type: 'compy', count: 8, delay: 1.0 }, { type: 'velociraptor', count: 2, delay: 1.5 }],
+    // Wave 5: dilophosaurus + raptors
+    [{ type: 'dilophosaurus', count: 4, delay: 1.5 }, { type: 'velociraptor', count: 3, delay: 1.0 }],
+    // Wave 6: mixed swarm + first triceratops
+    [{ type: 'compy', count: 6, delay: 0.8 }, { type: 'dilophosaurus', count: 3, delay: 1.5 }, { type: 'triceratops', count: 1, delay: 3 }],
+    // Wave 7: raptor pack
+    [{ type: 'velociraptor', count: 5, delay: 0.8 }, { type: 'dilophosaurus', count: 3, delay: 1.2 }],
+    // Wave 8: tank wave
+    [{ type: 'triceratops', count: 3, delay: 2.5 }, { type: 'compy', count: 8, delay: 0.6 }],
+    // Wave 9: everything
+    [{ type: 'velociraptor', count: 4, delay: 0.7 }, { type: 'dilophosaurus', count: 4, delay: 1.0 }, { type: 'triceratops', count: 2, delay: 2.0 }],
+    // Wave 10: BOSS - T-Rex with escorts
+    [{ type: 'dilophosaurus', count: 4, delay: 1.2 }, { type: 'triceratops', count: 2, delay: 2.5 }, { type: 'trex', count: 1, delay: 4 }],
+    // Wave 11: post-boss swarm
+    [{ type: 'compy', count: 12, delay: 0.4 }, { type: 'velociraptor', count: 6, delay: 0.6 }],
+    // Wave 12: double tanks
+    [{ type: 'triceratops', count: 4, delay: 2.0 }, { type: 'dilophosaurus', count: 5, delay: 1.0 }, { type: 'velociraptor', count: 4, delay: 0.7 }],
+    // Wave 13: raptor blitz
+    [{ type: 'velociraptor', count: 10, delay: 0.5 }, { type: 'triceratops', count: 2, delay: 2.0 }],
+    // Wave 14: everything harder
+    [{ type: 'compy', count: 10, delay: 0.4 }, { type: 'dilophosaurus', count: 6, delay: 0.8 }, { type: 'triceratops', count: 3, delay: 1.8 }, { type: 'velociraptor', count: 5, delay: 0.6 }],
+    // Wave 15: double T-Rex
+    [{ type: 'trex', count: 2, delay: 5 }, { type: 'velociraptor', count: 6, delay: 0.6 }, { type: 'triceratops', count: 3, delay: 2.0 }],
 ];

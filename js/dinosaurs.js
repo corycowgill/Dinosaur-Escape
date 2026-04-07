@@ -3,57 +3,33 @@ window.DE = window.DE || {};
 DE.DinoManager = {
     dinos: [],
 
-    makeLeg: function(s, color, upperH, lowerH, thick) {
-        var leg = new THREE.Group();
-        var mat = new THREE.MeshLambertMaterial({ color: color });
-        var upper = new THREE.Mesh(new THREE.BoxGeometry(thick, upperH, thick), mat);
-        upper.position.y = -upperH / 2;
-        leg.add(upper);
-        var lower = new THREE.Mesh(new THREE.BoxGeometry(thick * 0.8, lowerH, thick * 0.8), mat);
-        lower.position.y = -upperH - lowerH / 2;
-        leg.add(lower);
-        var foot = new THREE.Mesh(new THREE.BoxGeometry(thick * 1.4, 0.06, thick * 1.8),
-            new THREE.MeshLambertMaterial({ color: 0x444444 }));
-        foot.position.set(0, -upperH - lowerH, thick * 0.3);
-        leg.add(foot);
-        return leg;
-    },
-
-    makeArm: function(s, color, len, thick) {
-        var arm = new THREE.Group();
-        var mat = new THREE.MeshLambertMaterial({ color: color });
-        var mesh = new THREE.Mesh(new THREE.BoxGeometry(thick, len, thick), mat);
-        mesh.position.y = -len / 2;
-        arm.add(mesh);
-        // Hand/claw
-        var claw = new THREE.Mesh(new THREE.ConeGeometry(thick * 0.6, thick * 1.5, 3),
-            new THREE.MeshLambertMaterial({ color: 0xddddcc }));
-        claw.position.y = -len;
-        arm.add(claw);
-        return arm;
-    },
-
     spawnDino: function(typeName, scene) {
         var typeData = DE.DINO_TYPES[typeName];
         if (!typeData) return null;
+
         var waypoints = DE.Map.getPathWaypoints();
+        if (!waypoints || waypoints.length === 0) return null;
         var startPos = waypoints[0];
+
         var result = this.createDinoMesh(typeName, typeData);
         var mesh = result.group;
-        mesh.position.set(startPos.x, 0.3, startPos.z);
+        mesh.position.set(startPos.x, 0.1, startPos.z);
         scene.add(mesh);
 
         // Health bar
         var hpBarGroup = new THREE.Group();
-        var hpBg = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.15, 0.05),
-            new THREE.MeshBasicMaterial({ color: 0x333333 }));
+        var hpBg = new THREE.Mesh(
+            new THREE.BoxGeometry(1.0, 0.12, 0.04),
+            new THREE.MeshBasicMaterial({ color: 0x222222 })
+        );
         hpBarGroup.add(hpBg);
-        var hpFill = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.1, 0.06),
-            new THREE.MeshBasicMaterial({ color: 0x44ff44 }));
+        var hpFill = new THREE.Mesh(
+            new THREE.BoxGeometry(0.96, 0.08, 0.05),
+            new THREE.MeshBasicMaterial({ color: 0x44ff44 })
+        );
         hpFill.position.z = 0.01;
         hpBarGroup.add(hpFill);
-        hpBarGroup.position.y = result.hpBarY;
-        hpBarGroup.rotation.x = -Math.PI / 4;
+        hpBarGroup.position.y = typeData.scale * 2.5 + 0.8;
         mesh.add(hpBarGroup);
 
         var dino = {
@@ -61,423 +37,318 @@ DE.DinoManager = {
             hp: typeData.hp, maxHp: typeData.hp,
             speed: typeData.speed, currentSpeed: typeData.speed,
             waypointIndex: 0, x: startPos.x, z: startPos.z,
-            mesh: mesh, hpFill: hpFill, bodyMesh: result.bodyMesh,
-            alive: true, stunTimer: 0, dotTimer: 0, dotDamage: 0, dotTickTimer: 0,
-            bobPhase: Math.random() * Math.PI * 2,
+            mesh: mesh, hpFill: hpFill, alive: true,
+            stunTimer: 0, dotTimer: 0, dotDamage: 0, dotTickTimer: 0,
+            animPhase: Math.random() * Math.PI * 2,
             leftLeg: result.leftLeg, rightLeg: result.rightLeg,
             leftArm: result.leftArm, rightArm: result.rightArm,
-            tail: result.tail, head: result.head, jaw: result.jaw,
-            // Quadruped legs
-            frontLeftLeg: result.frontLeftLeg, frontRightLeg: result.frontRightLeg,
-            backLeftLeg: result.backLeftLeg, backRightLeg: result.backRightLeg,
-            isQuadruped: typeData.bodyType === 'tank',
-            legAmplitude: result.legAmplitude || 0.4
+            tail: result.tail, jaw: result.jaw, bodyMesh: result.bodyMesh
         };
+
         this.dinos.push(dino);
         return dino;
+    },
+
+    makeLimb: function(geo, mat, pivotY, px, py, pz) {
+        var pivot = new THREE.Group();
+        var limb = new THREE.Mesh(geo, mat);
+        limb.position.y = -pivotY;
+        limb.castShadow = true;
+        pivot.add(limb);
+        pivot.position.set(px, py, pz);
+        return pivot;
     },
 
     createDinoMesh: function(typeName, typeData) {
         var group = new THREE.Group();
         var s = typeData.scale;
-        var mat = new THREE.MeshLambertMaterial({ color: typeData.color });
-        var darkMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(typeData.color).multiplyScalar(0.7) });
-        var bellyMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(typeData.color).lerp(new THREE.Color(0xffffff), 0.3) });
-        var refs = { group: group, bodyMesh: null, leftLeg: null, rightLeg: null,
-            leftArm: null, rightArm: null, tail: null, head: null, jaw: null,
-            frontLeftLeg: null, frontRightLeg: null, backLeftLeg: null, backRightLeg: null,
-            hpBarY: s * 3, legAmplitude: 0.4 };
+        var mat = new THREE.MeshStandardMaterial({ color: typeData.color, roughness: 0.7, metalness: 0.1 });
+        var darkMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(typeData.color).multiplyScalar(0.7), roughness: 0.8 });
+        var bellyMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(typeData.color).lerp(new THREE.Color(0xeeddcc), 0.5), roughness: 0.8 });
+        var leftLeg = null, rightLeg = null, leftArm = null, rightArm = null, tail = null, jaw = null, bodyMesh = null;
 
         switch (typeData.bodyType) {
-            case 'small': // Compy - tiny bipedal
-                var body = new THREE.Mesh(new THREE.SphereGeometry(s * 0.7, 8, 6), mat);
-                body.scale.set(0.8, 0.7, 1.2);
-                body.position.y = s * 1.2;
-                body.castShadow = true;
-                group.add(body);
-                refs.bodyMesh = body;
-                // Stripe on back
-                var stripe = new THREE.Mesh(new THREE.BoxGeometry(s * 0.2, 0.04, s * 1.2), darkMat);
-                stripe.position.set(0, s * 1.55, 0);
-                group.add(stripe);
-                // Neck
-                var neck = new THREE.Mesh(new THREE.CylinderGeometry(s * 0.15, s * 0.2, s * 0.5, 6), mat);
-                neck.position.set(0, s * 1.7, s * 0.5);
-                neck.rotation.x = -0.3;
+            case 'small': {
+                bodyMesh = new THREE.Mesh(new THREE.SphereGeometry(s * 0.7, 8, 6), mat);
+                bodyMesh.scale.set(0.8, 0.7, 1.2);
+                bodyMesh.position.y = s * 1.2;
+                bodyMesh.castShadow = true;
+                group.add(bodyMesh);
+                var belly = new THREE.Mesh(new THREE.SphereGeometry(s * 0.5, 6, 4), bellyMat);
+                belly.scale.set(0.7, 0.6, 1.0);
+                belly.position.set(0, s * 1.0, 0);
+                group.add(belly);
+                var neck = new THREE.Mesh(new THREE.CylinderGeometry(s * 0.15, s * 0.25, s * 0.6, 5), mat);
+                neck.position.set(0, s * 1.6, s * 0.4);
+                neck.rotation.x = -0.4;
                 group.add(neck);
-                // Head
-                var head = new THREE.Group();
-                var skull = new THREE.Mesh(new THREE.SphereGeometry(s * 0.35, 6, 6), mat);
-                skull.scale.set(0.8, 0.8, 1.1);
-                head.add(skull);
-                // Eyes
+                var head = new THREE.Mesh(new THREE.SphereGeometry(s * 0.35, 6, 5), mat);
+                head.scale.set(0.9, 0.8, 1.2);
+                head.position.set(0, s * 2.0, s * 0.7);
+                group.add(head);
+                var snout = new THREE.Mesh(new THREE.BoxGeometry(s * 0.2, s * 0.15, s * 0.4), darkMat);
+                snout.position.set(0, s * 1.9, s * 1.0);
+                group.add(snout);
                 var eyeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
                 for (var side = -1; side <= 1; side += 2) {
-                    var eye = new THREE.Mesh(new THREE.SphereGeometry(s * 0.07, 4, 4), eyeMat);
-                    eye.position.set(side * s * 0.2, s * 0.1, s * 0.25);
-                    head.add(eye);
+                    var eye = new THREE.Mesh(new THREE.SphereGeometry(s * 0.06, 4, 4), eyeMat);
+                    eye.position.set(side * s * 0.2, s * 2.1, s * 0.9);
+                    group.add(eye);
                 }
-                // Snout
-                var snout = new THREE.Mesh(new THREE.BoxGeometry(s * 0.2, s * 0.15, s * 0.3), mat);
-                snout.position.set(0, -s * 0.1, s * 0.3);
-                head.add(snout);
-                head.position.set(0, s * 2.0, s * 0.8);
-                group.add(head);
-                refs.head = head;
-                // Tail
-                var tail = new THREE.Group();
-                var tailMesh = new THREE.Mesh(new THREE.ConeGeometry(s * 0.18, s * 1.4, 4), mat);
+                tail = new THREE.Group();
+                var tailMesh = new THREE.Mesh(new THREE.ConeGeometry(s * 0.15, s * 1.4, 4), darkMat);
                 tailMesh.rotation.x = Math.PI / 2;
                 tailMesh.position.z = -s * 0.5;
                 tail.add(tailMesh);
                 tail.position.set(0, s * 1.1, -s * 0.5);
                 group.add(tail);
-                refs.tail = tail;
-                // Legs
-                var ll = this.makeLeg(s, typeData.color, s * 0.5, s * 0.4, s * 0.15);
-                ll.position.set(-s * 0.25, s * 0.9, 0);
-                group.add(ll);
-                refs.leftLeg = ll;
-                var rl = this.makeLeg(s, typeData.color, s * 0.5, s * 0.4, s * 0.15);
-                rl.position.set(s * 0.25, s * 0.9, 0);
-                group.add(rl);
-                refs.rightLeg = rl;
-                refs.hpBarY = s * 2.8;
-                refs.legAmplitude = 0.5;
+                var legGeo = new THREE.BoxGeometry(s * 0.18, s * 0.8, s * 0.18);
+                leftLeg = this.makeLimb(legGeo, darkMat, s * 0.4, -s * 0.25, s * 0.7, 0);
+                rightLeg = this.makeLimb(legGeo, darkMat, s * 0.4, s * 0.25, s * 0.7, 0);
+                group.add(leftLeg);
+                group.add(rightLeg);
                 break;
-
-            case 'medium': // Dilophosaurus
-                var body = new THREE.Mesh(new THREE.BoxGeometry(s * 1.0, s * 0.9, s * 2.0), mat);
-                body.position.y = s * 1.5;
-                body.castShadow = true;
-                group.add(body);
-                refs.bodyMesh = body;
-                // Belly
-                var belly = new THREE.Mesh(new THREE.BoxGeometry(s * 0.8, s * 0.3, s * 1.5), bellyMat);
-                belly.position.set(0, s * 1.0, 0);
-                group.add(belly);
-                // Neck
-                var neck = new THREE.Mesh(new THREE.CylinderGeometry(s * 0.2, s * 0.3, s * 0.8, 6), mat);
-                neck.position.set(0, s * 2.2, s * 0.7);
-                neck.rotation.x = -0.4;
+            }
+            case 'medium': {
+                bodyMesh = new THREE.Mesh(new THREE.BoxGeometry(s * 1.0, s * 0.9, s * 1.8), mat);
+                bodyMesh.position.y = s * 1.4;
+                bodyMesh.castShadow = true;
+                group.add(bodyMesh);
+                var bellyStripe = new THREE.Mesh(new THREE.BoxGeometry(s * 0.6, s * 0.3, s * 1.6), bellyMat);
+                bellyStripe.position.set(0, s * 1.0, 0);
+                group.add(bellyStripe);
+                var neck = new THREE.Mesh(new THREE.CylinderGeometry(s * 0.2, s * 0.35, s * 1.0, 6), mat);
+                neck.position.set(0, s * 2.2, s * 0.6);
+                neck.rotation.x = -0.3;
                 group.add(neck);
-                // Head
-                var head = new THREE.Group();
-                var skull = new THREE.Mesh(new THREE.BoxGeometry(s * 0.5, s * 0.4, s * 0.7), mat);
-                head.add(skull);
-                // Double crests (iconic!)
-                var crestMat = new THREE.MeshLambertMaterial({ color: 0xff4422 });
-                for (var side = -1; side <= 1; side += 2) {
-                    var crest = new THREE.Mesh(new THREE.BoxGeometry(0.04, s * 0.5, s * 0.6), crestMat);
-                    crest.position.set(side * s * 0.15, s * 0.4, 0);
-                    head.add(crest);
-                }
-                // Eyes
-                for (var side = -1; side <= 1; side += 2) {
-                    var eye = new THREE.Mesh(new THREE.SphereGeometry(s * 0.08, 4, 4),
-                        new THREE.MeshBasicMaterial({ color: 0xffcc00 }));
-                    eye.position.set(side * s * 0.25, 0, s * 0.25);
-                    head.add(eye);
-                }
-                // Frill (retracted, hints at it)
-                var frillMat = new THREE.MeshLambertMaterial({ color: 0xff6633, side: THREE.DoubleSide });
-                for (var side = -1; side <= 1; side += 2) {
-                    var frill = new THREE.Mesh(new THREE.CircleGeometry(s * 0.4, 8), frillMat);
-                    frill.position.set(side * s * 0.35, -s * 0.1, -s * 0.1);
-                    frill.rotation.y = side * 0.5;
-                    head.add(frill);
-                }
-                head.position.set(0, s * 2.8, s * 1.2);
+                var head = new THREE.Mesh(new THREE.BoxGeometry(s * 0.5, s * 0.5, s * 0.9), mat);
+                head.position.set(0, s * 2.8, s * 0.9);
                 group.add(head);
-                refs.head = head;
-                // Tail
-                var tail = new THREE.Group();
-                var t1 = new THREE.Mesh(new THREE.BoxGeometry(s * 0.3, s * 0.3, s * 1.0), mat);
-                t1.position.z = -s * 0.3;
-                tail.add(t1);
-                var t2 = new THREE.Mesh(new THREE.ConeGeometry(s * 0.12, s * 0.8, 4), mat);
-                t2.rotation.x = Math.PI / 2;
-                t2.position.z = -s * 1.1;
-                tail.add(t2);
-                tail.position.set(0, s * 1.5, -s * 0.9);
-                group.add(tail);
-                refs.tail = tail;
-                // Legs
-                var ll = this.makeLeg(s, typeData.color, s * 0.7, s * 0.5, s * 0.22);
-                ll.position.set(-s * 0.35, s * 1.1, -s * 0.3);
-                group.add(ll); refs.leftLeg = ll;
-                var rl = this.makeLeg(s, typeData.color, s * 0.7, s * 0.5, s * 0.22);
-                rl.position.set(s * 0.35, s * 1.1, -s * 0.3);
-                group.add(rl); refs.rightLeg = rl;
-                // Arms
-                var la = this.makeArm(s, typeData.color, s * 0.4, s * 0.1);
-                la.position.set(-s * 0.5, s * 1.8, s * 0.5);
-                group.add(la); refs.leftArm = la;
-                var ra = this.makeArm(s, typeData.color, s * 0.4, s * 0.1);
-                ra.position.set(s * 0.5, s * 1.8, s * 0.5);
-                group.add(ra); refs.rightArm = ra;
-                refs.hpBarY = s * 3.6;
-                refs.legAmplitude = 0.35;
-                break;
-
-            case 'fast': // Velociraptor
-                var body = new THREE.Mesh(new THREE.BoxGeometry(s * 0.7, s * 0.6, s * 2.0), mat);
-                body.position.y = s * 1.3;
-                body.castShadow = true;
-                group.add(body);
-                refs.bodyMesh = body;
-                // Feather ridge along back
-                var featherMat = new THREE.MeshLambertMaterial({ color: 0xaa2200 });
-                for (var f = 0; f < 5; f++) {
-                    var feather = new THREE.Mesh(new THREE.BoxGeometry(0.03, s * 0.2, s * 0.15), featherMat);
-                    feather.position.set(0, s * 1.75, s * 0.6 - f * s * 0.3);
-                    feather.rotation.z = 0.2;
-                    group.add(feather);
-                }
-                // Neck
-                var neck = new THREE.Mesh(new THREE.CylinderGeometry(s * 0.12, s * 0.18, s * 0.6, 6), mat);
-                neck.position.set(0, s * 1.8, s * 0.8);
-                neck.rotation.x = -0.5;
-                group.add(neck);
-                // Head - pointed snout
-                var head = new THREE.Group();
-                var skull = new THREE.Mesh(new THREE.BoxGeometry(s * 0.35, s * 0.25, s * 0.6), mat);
-                head.add(skull);
-                var snout = new THREE.Mesh(new THREE.ConeGeometry(s * 0.12, s * 0.4, 4), mat);
-                snout.rotation.x = -Math.PI / 2;
-                snout.position.set(0, 0, s * 0.4);
-                head.add(snout);
-                // Eyes
+                jaw = new THREE.Group();
+                var jawMesh = new THREE.Mesh(new THREE.BoxGeometry(s * 0.45, s * 0.15, s * 0.7), darkMat);
+                jawMesh.position.z = s * 0.05;
+                jaw.add(jawMesh);
+                jaw.position.set(0, s * 2.5, s * 1.0);
+                group.add(jaw);
+                var crestMat = new THREE.MeshStandardMaterial({ color: 0xff4422, roughness: 0.5 });
                 for (var side = -1; side <= 1; side += 2) {
-                    var eye = new THREE.Mesh(new THREE.SphereGeometry(s * 0.06, 4, 4),
-                        new THREE.MeshBasicMaterial({ color: 0xffaa00 }));
-                    eye.position.set(side * s * 0.17, s * 0.05, s * 0.2);
-                    head.add(eye);
+                    var crest = new THREE.Mesh(new THREE.ConeGeometry(s * 0.2, s * 0.6, 4), crestMat);
+                    crest.position.set(side * s * 0.2, s * 3.2, s * 0.7);
+                    crest.rotation.z = side * 0.3;
+                    group.add(crest);
                 }
+                var frillMat = new THREE.MeshStandardMaterial({ color: 0xff6633, roughness: 0.5, side: THREE.DoubleSide });
+                for (var side = -1; side <= 1; side += 2) {
+                    var frill = new THREE.Mesh(new THREE.CircleGeometry(s * 0.55, 8), frillMat);
+                    frill.position.set(side * s * 0.4, s * 2.7, s * 0.7);
+                    frill.rotation.y = side * 0.8;
+                    group.add(frill);
+                }
+                var eyeMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
+                for (var side = -1; side <= 1; side += 2) {
+                    var eye = new THREE.Mesh(new THREE.SphereGeometry(s * 0.08, 4, 4), eyeMat);
+                    eye.position.set(side * s * 0.22, s * 2.9, s * 1.25);
+                    group.add(eye);
+                }
+                tail = new THREE.Group();
+                var tailMesh = new THREE.Mesh(new THREE.ConeGeometry(s * 0.25, s * 2.0, 5), darkMat);
+                tailMesh.rotation.x = Math.PI / 2;
+                tailMesh.position.z = -s * 0.8;
+                tail.add(tailMesh);
+                tail.position.set(0, s * 1.3, -s * 0.7);
+                group.add(tail);
+                var legGeo = new THREE.BoxGeometry(s * 0.25, s * 1.2, s * 0.3);
+                leftLeg = this.makeLimb(legGeo, darkMat, s * 0.6, -s * 0.35, s * 0.9, -s * 0.1);
+                rightLeg = this.makeLimb(legGeo, darkMat, s * 0.6, s * 0.35, s * 0.9, -s * 0.1);
+                group.add(leftLeg);
+                group.add(rightLeg);
+                var armGeo = new THREE.BoxGeometry(s * 0.12, s * 0.5, s * 0.12);
+                leftArm = this.makeLimb(armGeo, mat, s * 0.25, -s * 0.5, s * 1.8, s * 0.3);
+                rightArm = this.makeLimb(armGeo, mat, s * 0.25, s * 0.5, s * 1.8, s * 0.3);
+                group.add(leftArm);
+                group.add(rightArm);
+                break;
+            }
+            case 'fast': {
+                bodyMesh = new THREE.Mesh(new THREE.BoxGeometry(s * 0.7, s * 0.6, s * 1.8), mat);
+                bodyMesh.position.y = s * 1.3;
+                bodyMesh.castShadow = true;
+                group.add(bodyMesh);
+                var stripe = new THREE.Mesh(new THREE.BoxGeometry(s * 0.3, s * 0.1, s * 1.6),
+                    new THREE.MeshStandardMaterial({ color: 0x661111, roughness: 0.6 }));
+                stripe.position.set(0, s * 1.65, 0);
+                group.add(stripe);
+                var neck = new THREE.Mesh(new THREE.CylinderGeometry(s * 0.12, s * 0.2, s * 0.8, 5), mat);
+                neck.position.set(0, s * 1.8, s * 0.7);
+                neck.rotation.x = -0.6;
+                group.add(neck);
+                var head = new THREE.Mesh(new THREE.BoxGeometry(s * 0.35, s * 0.3, s * 0.8), mat);
                 head.position.set(0, s * 2.2, s * 1.2);
                 group.add(head);
-                refs.head = head;
-                // Tail - long and stiff
-                var tail = new THREE.Group();
-                var t1 = new THREE.Mesh(new THREE.BoxGeometry(s * 0.15, s * 0.15, s * 1.5), mat);
-                t1.position.z = -s * 0.5;
-                tail.add(t1);
-                tail.position.set(0, s * 1.3, -s * 0.8);
-                group.add(tail);
-                refs.tail = tail;
-                // Legs with sickle claws
-                var clawMat = new THREE.MeshLambertMaterial({ color: 0xdddddd });
+                var snout = new THREE.Mesh(new THREE.ConeGeometry(s * 0.12, s * 0.4, 4), mat);
+                snout.rotation.x = -Math.PI / 2;
+                snout.position.set(0, s * 2.15, s * 1.65);
+                group.add(snout);
+                var eyeMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
                 for (var side = -1; side <= 1; side += 2) {
-                    var leg = this.makeLeg(s, typeData.color, s * 0.5, s * 0.45, s * 0.14);
-                    // Add sickle claw
-                    var sickle = new THREE.Mesh(new THREE.ConeGeometry(0.04, s * 0.3, 3), clawMat);
-                    sickle.rotation.x = -0.4;
-                    sickle.position.set(0, -s * 0.95, s * 0.2);
-                    leg.add(sickle);
-                    leg.position.set(side * s * 0.25, s * 1.0, -s * 0.2);
-                    group.add(leg);
-                    if (side === -1) refs.leftLeg = leg; else refs.rightLeg = leg;
+                    var eye = new THREE.Mesh(new THREE.SphereGeometry(s * 0.06, 4, 4), eyeMat);
+                    eye.position.set(side * s * 0.17, s * 2.3, s * 1.35);
+                    group.add(eye);
                 }
-                // Small grasping arms
-                var la = this.makeArm(s, typeData.color, s * 0.3, s * 0.06);
-                la.position.set(-s * 0.35, s * 1.5, s * 0.5);
-                group.add(la); refs.leftArm = la;
-                var ra = this.makeArm(s, typeData.color, s * 0.3, s * 0.06);
-                ra.position.set(s * 0.35, s * 1.5, s * 0.5);
-                group.add(ra); refs.rightArm = ra;
-                refs.hpBarY = s * 3.0;
-                refs.legAmplitude = 0.6;
+                tail = new THREE.Group();
+                var tailMesh = new THREE.Mesh(new THREE.ConeGeometry(s * 0.12, s * 2.2, 4), darkMat);
+                tailMesh.rotation.x = Math.PI / 2;
+                tailMesh.position.z = -s * 0.9;
+                tail.add(tailMesh);
+                tail.position.set(0, s * 1.3, -s * 0.7);
+                group.add(tail);
+                var thighGeo = new THREE.BoxGeometry(s * 0.2, s * 0.7, s * 0.25);
+                leftLeg = this.makeLimb(thighGeo, darkMat, s * 0.35, -s * 0.3, s * 0.9, -s * 0.1);
+                rightLeg = this.makeLimb(thighGeo, darkMat, s * 0.35, s * 0.3, s * 0.9, -s * 0.1);
+                group.add(leftLeg);
+                group.add(rightLeg);
+                var armGeo = new THREE.BoxGeometry(s * 0.1, s * 0.45, s * 0.1);
+                leftArm = this.makeLimb(armGeo, mat, s * 0.22, -s * 0.35, s * 1.6, s * 0.5);
+                rightArm = this.makeLimb(armGeo, mat, s * 0.22, s * 0.35, s * 1.6, s * 0.5);
+                group.add(leftArm);
+                group.add(rightArm);
+                var clawMat = new THREE.MeshStandardMaterial({ color: 0xccccbb, roughness: 0.3 });
+                for (var side = -1; side <= 1; side += 2) {
+                    var claw = new THREE.Mesh(new THREE.ConeGeometry(0.04, s * 0.35, 3), clawMat);
+                    claw.rotation.x = 0.5;
+                    claw.position.set(side * s * 0.3, s * 0.15, s * 0.15);
+                    group.add(claw);
+                }
                 break;
-
-            case 'tank': // Triceratops - quadruped
-                var body = new THREE.Mesh(new THREE.BoxGeometry(s * 2.0, s * 1.4, s * 2.8), mat);
-                body.position.y = s * 1.5;
-                body.castShadow = true;
-                group.add(body);
-                refs.bodyMesh = body;
-                // Belly
-                var belly = new THREE.Mesh(new THREE.BoxGeometry(s * 1.6, s * 0.4, s * 2.2), bellyMat);
+            }
+            case 'tank': {
+                bodyMesh = new THREE.Mesh(new THREE.BoxGeometry(s * 1.8, s * 1.4, s * 2.4), mat);
+                bodyMesh.position.y = s * 1.3;
+                bodyMesh.castShadow = true;
+                group.add(bodyMesh);
+                var belly = new THREE.Mesh(new THREE.BoxGeometry(s * 1.4, s * 0.5, s * 2.0), bellyMat);
                 belly.position.set(0, s * 0.7, 0);
                 group.add(belly);
-                // Head shield (frill)
-                var shieldMat = new THREE.MeshLambertMaterial({ color: 0x7777aa, side: THREE.DoubleSide });
-                var shield = new THREE.Mesh(new THREE.CircleGeometry(s * 1.2, 10), shieldMat);
-                shield.position.set(0, s * 2.3, s * 1.3);
-                shield.rotation.x = 0.2;
-                group.add(shield);
-                // Shield edge bumps
-                var bumpMat = new THREE.MeshLambertMaterial({ color: 0x9999bb });
-                for (var i = 0; i < 8; i++) {
-                    var ang = (i / 8) * Math.PI + 0.2;
-                    var bump = new THREE.Mesh(new THREE.SphereGeometry(s * 0.12, 4, 4), bumpMat);
-                    bump.position.set(Math.cos(ang) * s * 1.15, s * 2.3 + Math.sin(ang) * s * 1.15, s * 1.25);
-                    group.add(bump);
-                }
-                // Head
-                var head = new THREE.Group();
-                var skull = new THREE.Mesh(new THREE.BoxGeometry(s * 0.9, s * 0.7, s * 1.0), mat);
-                head.add(skull);
-                // Beak
-                var beak = new THREE.Mesh(new THREE.ConeGeometry(s * 0.2, s * 0.4, 4),
-                    new THREE.MeshLambertMaterial({ color: 0xaaaa88 }));
-                beak.rotation.x = -Math.PI / 2;
-                beak.position.set(0, -s * 0.1, s * 0.6);
-                head.add(beak);
-                // Three horns
-                var hornMat = new THREE.MeshLambertMaterial({ color: 0xeeeecc });
-                // Nose horn (short)
-                var noseHorn = new THREE.Mesh(new THREE.ConeGeometry(s * 0.08, s * 0.4, 5), hornMat);
-                noseHorn.rotation.x = -0.5;
-                noseHorn.position.set(0, s * 0.15, s * 0.5);
-                head.add(noseHorn);
-                // Brow horns (long)
-                for (var side = -1; side <= 1; side += 2) {
-                    var horn = new THREE.Mesh(new THREE.ConeGeometry(s * 0.07, s * 1.0, 5), hornMat);
-                    horn.rotation.x = -0.6;
-                    horn.position.set(side * s * 0.35, s * 0.3, s * 0.3);
-                    head.add(horn);
-                }
-                // Eyes
-                for (var side = -1; side <= 1; side += 2) {
-                    var eye = new THREE.Mesh(new THREE.SphereGeometry(s * 0.08, 4, 4),
-                        new THREE.MeshBasicMaterial({ color: 0x222222 }));
-                    eye.position.set(side * s * 0.4, s * 0.1, s * 0.3);
-                    head.add(eye);
-                }
-                head.position.set(0, s * 1.8, s * 1.5);
+                var head = new THREE.Mesh(new THREE.BoxGeometry(s * 1.2, s * 1.0, s * 1.0), mat);
+                head.position.set(0, s * 1.6, s * 1.5);
                 group.add(head);
-                refs.head = head;
-                // Tail
-                var tail = new THREE.Group();
-                var t1 = new THREE.Mesh(new THREE.ConeGeometry(s * 0.3, s * 1.5, 5), mat);
-                t1.rotation.x = Math.PI / 2;
-                t1.position.z = -s * 0.5;
-                tail.add(t1);
-                tail.position.set(0, s * 1.4, -s * 1.3);
+                var beak = new THREE.Mesh(new THREE.ConeGeometry(s * 0.3, s * 0.5, 4), darkMat);
+                beak.rotation.x = -Math.PI / 2;
+                beak.position.set(0, s * 1.4, s * 2.1);
+                group.add(beak);
+                var frillMat = new THREE.MeshStandardMaterial({ color: 0x887766, roughness: 0.6, side: THREE.DoubleSide });
+                var frill = new THREE.Mesh(new THREE.CircleGeometry(s * 1.2, 10), frillMat);
+                frill.position.set(0, s * 2.2, s * 1.0);
+                frill.rotation.x = -0.3;
+                group.add(frill);
+                var hornMat = new THREE.MeshStandardMaterial({ color: 0xeeddbb, roughness: 0.3 });
+                var noseHorn = new THREE.Mesh(new THREE.ConeGeometry(s * 0.1, s * 0.5, 5), hornMat);
+                noseHorn.rotation.x = -0.5;
+                noseHorn.position.set(0, s * 1.8, s * 2.0);
+                group.add(noseHorn);
+                for (var side = -1; side <= 1; side += 2) {
+                    var horn = new THREE.Mesh(new THREE.ConeGeometry(s * 0.08, s * 1.2, 5), hornMat);
+                    horn.rotation.x = -0.6;
+                    horn.rotation.z = side * 0.15;
+                    horn.position.set(side * s * 0.45, s * 2.1, s * 1.6);
+                    group.add(horn);
+                }
+                for (var side = -1; side <= 1; side += 2) {
+                    var eye = new THREE.Mesh(new THREE.SphereGeometry(s * 0.08, 4, 4), new THREE.MeshBasicMaterial({ color: 0x332211 }));
+                    eye.position.set(side * s * 0.55, s * 1.7, s * 1.7);
+                    group.add(eye);
+                }
+                tail = new THREE.Group();
+                var tailMesh = new THREE.Mesh(new THREE.ConeGeometry(s * 0.35, s * 1.5, 5), darkMat);
+                tailMesh.rotation.x = Math.PI / 2;
+                tailMesh.position.z = -s * 0.5;
+                tail.add(tailMesh);
+                tail.position.set(0, s * 1.2, -s * 1.0);
                 group.add(tail);
-                refs.tail = tail;
-                // Four legs
-                var legH = s * 0.6;
-                var legLH = s * 0.5;
-                var legT = s * 0.25;
-                var fl = this.makeLeg(s, typeData.color, legH, legLH, legT);
-                fl.position.set(-s * 0.7, s * 1.0, s * 0.8);
-                group.add(fl); refs.frontLeftLeg = fl;
-                var fr = this.makeLeg(s, typeData.color, legH, legLH, legT);
-                fr.position.set(s * 0.7, s * 1.0, s * 0.8);
-                group.add(fr); refs.frontRightLeg = fr;
-                var bl = this.makeLeg(s, typeData.color, legH, legLH, legT);
-                bl.position.set(-s * 0.7, s * 1.0, -s * 0.8);
-                group.add(bl); refs.backLeftLeg = bl;
-                var br = this.makeLeg(s, typeData.color, legH, legLH, legT);
-                br.position.set(s * 0.7, s * 1.0, -s * 0.8);
-                group.add(br); refs.backRightLeg = br;
-                refs.hpBarY = s * 3.8;
-                refs.legAmplitude = 0.25;
+                var legGeo = new THREE.CylinderGeometry(s * 0.25, s * 0.3, s * 1.0, 6);
+                leftLeg = this.makeLimb(legGeo, darkMat, s * 0.5, -s * 0.65, s * 0.8, s * 0.6);
+                rightLeg = this.makeLimb(legGeo, darkMat, s * 0.5, s * 0.65, s * 0.8, s * 0.6);
+                var backLeftLeg = this.makeLimb(legGeo, darkMat, s * 0.5, -s * 0.65, s * 0.8, -s * 0.6);
+                var backRightLeg = this.makeLimb(legGeo, darkMat, s * 0.5, s * 0.65, s * 0.8, -s * 0.6);
+                group.add(leftLeg); group.add(rightLeg);
+                group.add(backLeftLeg); group.add(backRightLeg);
+                leftArm = backLeftLeg;
+                rightArm = backRightLeg;
                 break;
-
-            case 'boss': // T-Rex - BIG and scary
-                var body = new THREE.Mesh(new THREE.BoxGeometry(s * 1.8, s * 1.8, s * 3.0), mat);
-                body.position.y = s * 2.2;
-                body.castShadow = true;
-                group.add(body);
-                refs.bodyMesh = body;
-                // Belly
-                var belly = new THREE.Mesh(new THREE.BoxGeometry(s * 1.4, s * 0.6, s * 2.0), bellyMat);
+            }
+            case 'boss': {
+                bodyMesh = new THREE.Mesh(new THREE.BoxGeometry(s * 1.8, s * 1.8, s * 2.8), mat);
+                bodyMesh.position.y = s * 2.0;
+                bodyMesh.castShadow = true;
+                group.add(bodyMesh);
+                var belly = new THREE.Mesh(new THREE.BoxGeometry(s * 1.4, s * 0.8, s * 2.2), bellyMat);
                 belly.position.set(0, s * 1.2, 0);
                 group.add(belly);
-                // Spine ridges
-                for (var r = 0; r < 6; r++) {
-                    var ridge = new THREE.Mesh(new THREE.BoxGeometry(s * 0.1, s * 0.2, s * 0.3), darkMat);
-                    ridge.position.set(0, s * 3.2, s * 1.0 - r * s * 0.4);
+                var ridgeMat = new THREE.MeshStandardMaterial({ color: 0x332211, roughness: 0.7 });
+                for (var i = 0; i < 5; i++) {
+                    var ridge = new THREE.Mesh(new THREE.ConeGeometry(s * 0.1, s * 0.3, 3), ridgeMat);
+                    ridge.position.set(0, s * 2.95, -s * 0.8 + i * s * 0.5);
                     group.add(ridge);
                 }
-                // Neck
-                var neck = new THREE.Mesh(new THREE.BoxGeometry(s * 0.8, s * 0.8, s * 0.8), mat);
-                neck.position.set(0, s * 3.2, s * 1.3);
+                var neck = new THREE.Mesh(new THREE.CylinderGeometry(s * 0.5, s * 0.7, s * 1.0, 6), mat);
+                neck.position.set(0, s * 3.0, s * 1.0);
+                neck.rotation.x = -0.2;
                 group.add(neck);
-                // Head
-                var head = new THREE.Group();
-                var skull = new THREE.Mesh(new THREE.BoxGeometry(s * 1.1, s * 0.9, s * 1.5), mat);
-                head.add(skull);
-                // Snout ridges
-                var ridgeMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(typeData.color).multiplyScalar(0.8) });
-                var ridge1 = new THREE.Mesh(new THREE.BoxGeometry(s * 0.5, s * 0.15, s * 1.0), ridgeMat);
-                ridge1.position.set(0, s * 0.5, 0);
-                head.add(ridge1);
-                // Jaw (animated)
-                var jaw = new THREE.Group();
-                var jawMesh = new THREE.Mesh(new THREE.BoxGeometry(s * 0.9, s * 0.25, s * 1.2),
-                    new THREE.MeshLambertMaterial({ color: 0x553322 }));
-                jaw.add(jawMesh);
-                // Teeth
-                var teethMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-                for (var t = -3; t <= 3; t++) {
-                    var tooth = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.2, 3), teethMat);
-                    tooth.rotation.x = Math.PI;
-                    tooth.position.set(t * s * 0.13, s * 0.15, s * 0.5);
-                    jaw.add(tooth);
-                    // Top teeth
-                    var topTooth = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.2, 3), teethMat);
-                    topTooth.position.set(t * s * 0.13, s * 0.35, s * 0.5);
-                    head.add(topTooth);
-                }
-                jaw.position.set(0, -s * 0.35, 0);
-                head.add(jaw);
-                refs.jaw = jaw;
-                // Eyes - red and glowing
-                var eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-                for (var side = -1; side <= 1; side += 2) {
-                    var eye = new THREE.Mesh(new THREE.SphereGeometry(s * 0.12, 6, 6), eyeMat);
-                    eye.position.set(side * s * 0.45, s * 0.25, s * 0.5);
-                    head.add(eye);
-                    // Brow ridge
-                    var brow = new THREE.Mesh(new THREE.BoxGeometry(s * 0.2, s * 0.1, s * 0.3), darkMat);
-                    brow.position.set(side * s * 0.4, s * 0.4, s * 0.4);
-                    head.add(brow);
-                }
-                // Nostrils
-                for (var side = -1; side <= 1; side += 2) {
-                    var nostril = new THREE.Mesh(new THREE.SphereGeometry(s * 0.05, 4, 4),
-                        new THREE.MeshBasicMaterial({ color: 0x222222 }));
-                    nostril.position.set(side * s * 0.15, 0, s * 0.7);
-                    head.add(nostril);
-                }
-                head.position.set(0, s * 3.5, s * 2.0);
+                var head = new THREE.Mesh(new THREE.BoxGeometry(s * 1.2, s * 0.9, s * 1.5), mat);
+                head.position.set(0, s * 3.5, s * 1.5);
                 group.add(head);
-                refs.head = head;
-                // Tail - thick and powerful
-                var tail = new THREE.Group();
-                var t1 = new THREE.Mesh(new THREE.BoxGeometry(s * 0.8, s * 0.7, s * 1.5), mat);
-                t1.position.z = -s * 0.5;
-                tail.add(t1);
-                var t2 = new THREE.Mesh(new THREE.ConeGeometry(s * 0.25, s * 1.5, 5), mat);
-                t2.rotation.x = Math.PI / 2;
-                t2.position.z = -s * 1.8;
-                tail.add(t2);
-                tail.position.set(0, s * 2.0, -s * 1.3);
+                var brow = new THREE.Mesh(new THREE.BoxGeometry(s * 1.25, s * 0.25, s * 0.8), ridgeMat);
+                brow.position.set(0, s * 4.0, s * 1.5);
+                group.add(brow);
+                jaw = new THREE.Group();
+                var jawMesh = new THREE.Mesh(new THREE.BoxGeometry(s * 1.0, s * 0.3, s * 1.3), darkMat);
+                jawMesh.position.z = s * 0.1;
+                jaw.add(jawMesh);
+                jaw.position.set(0, s * 3.1, s * 1.5);
+                group.add(jaw);
+                var teethMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 });
+                for (var t = -3; t <= 3; t++) {
+                    var tooth = new THREE.Mesh(new THREE.ConeGeometry(0.04, s * 0.25, 3), teethMat);
+                    tooth.rotation.x = Math.PI;
+                    tooth.position.set(t * s * 0.15, s * 3.55, s * 2.15);
+                    group.add(tooth);
+                    var btooth = new THREE.Mesh(new THREE.ConeGeometry(0.03, s * 0.18, 3), teethMat);
+                    btooth.position.set(t * s * 0.14, s * 0.15, s * 0.6);
+                    jaw.add(btooth);
+                }
+                var eyeMat = new THREE.MeshBasicMaterial({ color: 0xff2200 });
+                for (var side = -1; side <= 1; side += 2) {
+                    var eyeSocket = new THREE.Mesh(new THREE.SphereGeometry(s * 0.12, 4, 4), new THREE.MeshBasicMaterial({ color: 0x111111 }));
+                    eyeSocket.position.set(side * s * 0.5, s * 3.7, s * 2.0);
+                    group.add(eyeSocket);
+                    var eye = new THREE.Mesh(new THREE.SphereGeometry(s * 0.1, 4, 4), eyeMat);
+                    eye.position.set(side * s * 0.52, s * 3.7, s * 2.05);
+                    group.add(eye);
+                }
+                tail = new THREE.Group();
+                var tailMesh = new THREE.Mesh(new THREE.ConeGeometry(s * 0.5, s * 3.5, 6), darkMat);
+                tailMesh.rotation.x = Math.PI / 2;
+                tailMesh.position.z = -s * 1.5;
+                tail.add(tailMesh);
+                tail.position.set(0, s * 1.8, -s * 1.2);
                 group.add(tail);
-                refs.tail = tail;
-                // Massive legs
-                var ll = this.makeLeg(s, typeData.color, s * 1.0, s * 0.8, s * 0.35);
-                ll.position.set(-s * 0.6, s * 1.5, -s * 0.3);
-                group.add(ll); refs.leftLeg = ll;
-                var rl = this.makeLeg(s, typeData.color, s * 1.0, s * 0.8, s * 0.35);
-                rl.position.set(s * 0.6, s * 1.5, -s * 0.3);
-                group.add(rl); refs.rightLeg = rl;
-                // Tiny arms (iconic!)
-                var la = this.makeArm(s, typeData.color, s * 0.35, s * 0.1);
-                la.position.set(-s * 0.9, s * 2.8, s * 0.8);
-                group.add(la); refs.leftArm = la;
-                var ra = this.makeArm(s, typeData.color, s * 0.35, s * 0.1);
-                ra.position.set(s * 0.9, s * 2.8, s * 0.8);
-                group.add(ra); refs.rightArm = ra;
-                refs.hpBarY = s * 4.5;
-                refs.legAmplitude = 0.3;
+                var legGeo = new THREE.BoxGeometry(s * 0.5, s * 1.6, s * 0.55);
+                leftLeg = this.makeLimb(legGeo, darkMat, s * 0.8, -s * 0.7, s * 1.2, -s * 0.3);
+                rightLeg = this.makeLimb(legGeo, darkMat, s * 0.8, s * 0.7, s * 1.2, -s * 0.3);
+                group.add(leftLeg); group.add(rightLeg);
+                var armGeo = new THREE.BoxGeometry(s * 0.12, s * 0.4, s * 0.1);
+                leftArm = this.makeLimb(armGeo, mat, s * 0.2, -s * 0.9, s * 2.6, s * 0.8);
+                rightArm = this.makeLimb(armGeo, mat, s * 0.2, s * 0.9, s * 2.6, s * 0.8);
+                group.add(leftArm); group.add(rightArm);
+                for (var side = -1; side <= 1; side += 2) {
+                    var foot = new THREE.Mesh(new THREE.BoxGeometry(s * 0.6, s * 0.15, s * 0.7), darkMat);
+                    foot.position.set(side * s * 0.7, s * 0.08, -s * 0.1);
+                    group.add(foot);
+                }
                 break;
+            }
         }
-        group.castShadow = true;
-        return refs;
+        return { group: group, leftLeg: leftLeg, rightLeg: rightLeg, leftArm: leftArm, rightArm: rightArm, tail: tail, jaw: jaw, bodyMesh: bodyMesh };
     },
 
     update: function(dt, waypoints, gameState, scene) {
@@ -485,104 +356,62 @@ DE.DinoManager = {
             var dino = this.dinos[i];
             if (!dino.alive) continue;
 
-            // Process stun
             if (dino.stunTimer > 0) {
                 dino.stunTimer -= dt;
                 dino.currentSpeed = 0;
                 if (dino.bodyMesh && dino.bodyMesh.material) {
-                    var flash = Math.sin(Date.now() * 0.02) > 0;
-                    dino.bodyMesh.material.emissive = flash ?
+                    dino.bodyMesh.material.emissive = Math.sin(Date.now() * 0.02) > 0 ?
                         new THREE.Color(0xffff00) : new THREE.Color(0x000000);
                 }
             } else {
                 dino.currentSpeed = dino.speed;
-                if (dino.bodyMesh && dino.bodyMesh.material) {
-                    dino.bodyMesh.material.emissive = new THREE.Color(0x000000);
-                }
+                if (dino.bodyMesh && dino.bodyMesh.material) dino.bodyMesh.material.emissive = new THREE.Color(0x000000);
             }
 
-            // Process DOT
             if (dino.dotTimer > 0) {
                 dino.dotTimer -= dt;
                 dino.dotTickTimer -= dt;
-                if (dino.dotTickTimer <= 0) {
-                    dino.dotTickTimer = 1.0;
-                    this.damageDino(dino, dino.dotDamage, gameState, scene);
-                }
-                if (dino.bodyMesh && dino.bodyMesh.material) {
-                    dino.bodyMesh.material.emissive = new THREE.Color(0x004400);
-                }
+                if (dino.dotTickTimer <= 0) { dino.dotTickTimer = 1.0; this.damageDino(dino, dino.dotDamage, gameState, scene); }
+                if (dino.bodyMesh && dino.bodyMesh.material) dino.bodyMesh.material.emissive = new THREE.Color(0x003300);
             }
-
             if (!dino.alive) continue;
 
-            // Move along waypoints
             if (dino.currentSpeed > 0 && dino.waypointIndex < waypoints.length) {
                 var target = waypoints[dino.waypointIndex];
-                var dx = target.x - dino.x;
-                var dz = target.z - dino.z;
+                var dx = target.x - dino.x, dz = target.z - dino.z;
                 var dist = Math.sqrt(dx * dx + dz * dz);
                 if (dist < 0.2) {
                     dino.waypointIndex++;
-                    if (dino.waypointIndex >= waypoints.length) {
-                        this.escapeDino(dino, gameState, scene);
-                        continue;
-                    }
+                    if (dino.waypointIndex >= waypoints.length) { this.escapeDino(dino, gameState, scene); continue; }
                 } else {
                     var moveSpeed = dino.currentSpeed * dt;
                     dino.x += (dx / dist) * moveSpeed;
                     dino.z += (dz / dist) * moveSpeed;
-                    var angle = Math.atan2(dx, dz);
-                    dino.mesh.rotation.y = angle;
+                    dino.mesh.rotation.y = Math.atan2(dx, dz);
                 }
             }
 
-            // Animation
-            dino.bobPhase += dt * dino.currentSpeed * 4;
-            var moving = dino.currentSpeed > 0;
-            var amp = moving ? dino.legAmplitude : 0;
-            var phase = dino.bobPhase;
+            // Animate limbs
+            var animSpeed = dino.currentSpeed > 0 ? dino.currentSpeed * 4 : 0;
+            dino.animPhase += dt * animSpeed;
+            var legSwing = Math.sin(dino.animPhase) * 0.5;
+            var armSwing = Math.sin(dino.animPhase + Math.PI) * 0.35;
+            if (dino.leftLeg) dino.leftLeg.rotation.x = dino.currentSpeed > 0 ? legSwing : 0;
+            if (dino.rightLeg) dino.rightLeg.rotation.x = dino.currentSpeed > 0 ? -legSwing : 0;
+            if (dino.leftArm) dino.leftArm.rotation.x = dino.currentSpeed > 0 ? armSwing : 0;
+            if (dino.rightArm) dino.rightArm.rotation.x = dino.currentSpeed > 0 ? -armSwing : 0;
+            if (dino.tail) dino.tail.rotation.y = Math.sin(dino.animPhase * 0.7) * 0.2;
+            if (dino.jaw && dino.typeName === 'trex') dino.jaw.rotation.x = Math.sin(dino.animPhase * 0.5) * 0.12;
 
-            // Leg animation
-            if (dino.isQuadruped) {
-                if (dino.frontLeftLeg) dino.frontLeftLeg.rotation.x = Math.sin(phase) * amp;
-                if (dino.backRightLeg) dino.backRightLeg.rotation.x = Math.sin(phase) * amp;
-                if (dino.frontRightLeg) dino.frontRightLeg.rotation.x = Math.sin(phase + Math.PI) * amp;
-                if (dino.backLeftLeg) dino.backLeftLeg.rotation.x = Math.sin(phase + Math.PI) * amp;
-            } else {
-                if (dino.leftLeg) dino.leftLeg.rotation.x = Math.sin(phase) * amp;
-                if (dino.rightLeg) dino.rightLeg.rotation.x = Math.sin(phase + Math.PI) * amp;
-                if (dino.leftArm) dino.leftArm.rotation.x = Math.sin(phase + Math.PI) * amp * 0.4;
-                if (dino.rightArm) dino.rightArm.rotation.x = Math.sin(phase) * amp * 0.4;
-            }
-
-            // Tail sway
-            if (dino.tail) {
-                dino.tail.rotation.y = Math.sin(phase * 0.6) * 0.2 * (moving ? 1 : 0.3);
-            }
-
-            // Head bob
-            if (dino.head) {
-                dino.head.rotation.x = Math.sin(phase * 2) * 0.05 * (moving ? 1 : 0);
-            }
-
-            // T-Rex jaw snap
-            if (dino.jaw && moving) {
-                dino.jaw.rotation.x = Math.max(0, Math.sin(phase * 0.8)) * 0.15;
-            }
-
-            // Body bob
             dino.mesh.position.x = dino.x;
             dino.mesh.position.z = dino.z;
-            dino.mesh.position.y = 0.1 + Math.abs(Math.sin(phase)) * 0.1 * (moving ? 1 : 0);
+            dino.mesh.position.y = 0.1 + (dino.currentSpeed > 0 ? Math.abs(Math.sin(dino.animPhase)) * 0.08 : 0);
+            if (dino.bodyMesh && dino.currentSpeed > 0) dino.bodyMesh.rotation.z = Math.sin(dino.animPhase * 0.8) * 0.03;
 
-            // Health bar
             var hpRatio = dino.hp / dino.maxHp;
             dino.hpFill.scale.x = Math.max(0.01, hpRatio);
-            dino.hpFill.position.x = -(1.15 * (1 - hpRatio)) / 2;
-            if (hpRatio > 0.5) dino.hpFill.material.color.setHex(0x44ff44);
-            else if (hpRatio > 0.25) dino.hpFill.material.color.setHex(0xffaa00);
-            else dino.hpFill.material.color.setHex(0xff3333);
+            dino.hpFill.position.x = -(0.96 * (1 - hpRatio)) / 2;
+            dino.hpFill.material.color.setHex(hpRatio > 0.5 ? 0x44ff44 : hpRatio > 0.25 ? 0xffaa00 : 0xff3333);
         }
     },
 
@@ -603,16 +432,13 @@ DE.DinoManager = {
     },
 
     deathEffect: function(dino, scene) {
+        var colors = [0xffff00, 0xff8800, 0xffffff];
         for (var i = 0; i < 8; i++) {
-            var particle = new THREE.Mesh(
-                new THREE.SphereGeometry(0.12, 4, 4),
-                new THREE.MeshBasicMaterial({ color: i < 4 ? 0xffff00 : 0xff8800, transparent: true, opacity: 0.8 }));
-            particle.position.set(
-                dino.x + (Math.random() - 0.5) * 1.5,
-                0.5 + Math.random() * 1.5,
-                dino.z + (Math.random() - 0.5) * 1.5);
-            scene.add(particle);
-            (function(p) { setTimeout(function() { scene.remove(p); }, 400); })(particle);
+            var p = new THREE.Mesh(new THREE.SphereGeometry(0.12, 4, 4),
+                new THREE.MeshBasicMaterial({ color: colors[i % 3], transparent: true, opacity: 0.9 }));
+            p.position.set(dino.x + (Math.random() - 0.5) * 1.5, 0.5 + Math.random() * 1.5, dino.z + (Math.random() - 0.5) * 1.5);
+            scene.add(p);
+            (function(m) { setTimeout(function() { scene.remove(m); }, 400); })(p);
         }
     },
 
@@ -621,7 +447,7 @@ DE.DinoManager = {
         gameState.lives--;
         DE.HUD.updateLives(gameState.lives, DE.CONFIG.MAX_LIVES);
         DE.Audio.playSound('escape');
-        var flash = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8),
+        var flash = new THREE.Mesh(new THREE.SphereGeometry(0.6, 8, 8),
             new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.6 }));
         flash.position.set(dino.x, 0.5, dino.z);
         scene.add(flash);
@@ -631,28 +457,19 @@ DE.DinoManager = {
 
     applyEffect: function(dino, effectType, duration, value) {
         if (!dino.alive) return;
-        if (effectType === 'stun') {
-            dino.stunTimer = Math.max(dino.stunTimer, duration);
-        } else if (effectType === 'dot') {
-            dino.dotTimer = duration;
-            dino.dotDamage = value || 1;
-            dino.dotTickTimer = 0;
-        }
+        if (effectType === 'stun') dino.stunTimer = Math.max(dino.stunTimer, duration);
+        else if (effectType === 'dot') { dino.dotTimer = duration; dino.dotDamage = value || 1; dino.dotTickTimer = 0; }
     },
 
     getAliveDinos: function() {
         var alive = [];
-        for (var i = 0; i < this.dinos.length; i++) {
-            if (this.dinos[i].alive) alive.push(this.dinos[i]);
-        }
+        for (var i = 0; i < this.dinos.length; i++) if (this.dinos[i].alive) alive.push(this.dinos[i]);
         return alive;
     },
 
     clear: function(scene) {
         for (var i = 0; i < this.dinos.length; i++) {
-            if (this.dinos[i].mesh && this.dinos[i].mesh.parent) {
-                this.dinos[i].mesh.parent.remove(this.dinos[i].mesh);
-            }
+            if (this.dinos[i].mesh && this.dinos[i].mesh.parent) this.dinos[i].mesh.parent.remove(this.dinos[i].mesh);
         }
         this.dinos = [];
     }
