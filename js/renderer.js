@@ -32,17 +32,29 @@ DE.Renderer = {
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-        this.scene.fog = new THREE.Fog(0x87CEEB, 80, 150);
+        // Atmospheric fog - gentle depth
+        this.scene.fog = new THREE.Fog(0x9ac8e8, 60, 130);
 
-        this.scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-        var sun = new THREE.DirectionalLight(0xfff5e0, 0.9);
-        sun.position.set(15, 30, 20); sun.castShadow = true;
+        // Ambient fill - slightly warm
+        this.scene.add(new THREE.AmbientLight(0xffeedd, 0.4));
+
+        // Main sun light - warm golden hour tone
+        var sun = new THREE.DirectionalLight(0xfff0c8, 1.0);
+        sun.position.set(20, 35, 15); sun.castShadow = true;
         sun.shadow.mapSize.width = 2048; sun.shadow.mapSize.height = 2048;
-        sun.shadow.camera.near = 0.5; sun.shadow.camera.far = 80;
-        sun.shadow.camera.left = -40; sun.shadow.camera.right = 40;
-        sun.shadow.camera.top = 40; sun.shadow.camera.bottom = -40;
+        sun.shadow.camera.near = 0.5; sun.shadow.camera.far = 100;
+        sun.shadow.camera.left = -45; sun.shadow.camera.right = 45;
+        sun.shadow.camera.top = 45; sun.shadow.camera.bottom = -45;
+        sun.shadow.bias = -0.001;
         this.scene.add(sun);
-        this.scene.add(new THREE.HemisphereLight(0x88bbff, 0x445522, 0.3));
+
+        // Hemisphere light - blue sky above, warm green ground bounce
+        this.scene.add(new THREE.HemisphereLight(0x88bbff, 0x556633, 0.35));
+
+        // Secondary fill light from opposite side (cool blue)
+        var fill = new THREE.DirectionalLight(0xaabbdd, 0.25);
+        fill.position.set(-15, 10, -10);
+        this.scene.add(fill);
 
         this.groundPlane = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshBasicMaterial({ visible: false }));
         this.groundPlane.rotation.x = -Math.PI / 2;
