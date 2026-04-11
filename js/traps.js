@@ -327,9 +327,62 @@ DE.TrapManager = {
     },
 
     update: function(dt, dinosaurs, scene) {
+        this.animTime = (this.animTime || 0) + dt;
         for (var i = 0; i < this.traps.length; i++) {
             var trap = this.traps[i];
             if (!trap.active) continue;
+
+            // Idle animation for all traps
+            var t = this.animTime;
+            if (trap.mesh) {
+                if (trap.type.id === 'electro') {
+                    // Rotating electro trap
+                    trap.mesh.rotation.y += dt * 0.5;
+                    // Pulse glow children
+                    var children = trap.mesh.children;
+                    for (var ci = 0; ci < children.length; ci++) {
+                        if (children[ci].material && children[ci].material.emissive) {
+                            children[ci].material.emissiveIntensity = 0.5 + Math.sin(t * 4 + i) * 0.3;
+                        }
+                    }
+                } else if (trap.type.id === 'snare_cannon') {
+                    // Slight barrel rotation toward nearest dino
+                    var nearest = null, nearDist = trap.type.range;
+                    for (var d = 0; d < dinosaurs.length; d++) {
+                        if (!dinosaurs[d].alive) continue;
+                        var ddx = dinosaurs[d].x - trap.x, ddz = dinosaurs[d].z - trap.z;
+                        var dd = Math.sqrt(ddx * ddx + ddz * ddz);
+                        if (dd < nearDist) { nearDist = dd; nearest = dinosaurs[d]; }
+                    }
+                    if (nearest) {
+                        var targetAngle = Math.atan2(nearest.x - trap.x, nearest.z - trap.z);
+                        var diff = targetAngle - trap.mesh.rotation.y;
+                        while (diff > Math.PI) diff -= Math.PI * 2;
+                        while (diff < -Math.PI) diff += Math.PI * 2;
+                        trap.mesh.rotation.y += diff * dt * 3;
+                    }
+                } else if (trap.type.id === 'stun_bomb') {
+                    // Pulsing indicator light
+                    var pulse = Math.sin(t * 3 + i * 1.5) > 0.7 ? 1.0 : 0.2;
+                    var children = trap.mesh.children;
+                    for (var ci = 0; ci < children.length; ci++) {
+                        if (children[ci].material && children[ci].material.color &&
+                            children[ci].material.color.getHex() === 0xff0000) {
+                            children[ci].material.opacity = pulse;
+                        }
+                    }
+                } else if (trap.type.id === 'tranq_dart') {
+                    // Scope lens glint
+                    var glint = Math.sin(t * 2.5 + i * 2) * 0.5 + 0.5;
+                    var children = trap.mesh.children;
+                    for (var ci = 0; ci < children.length; ci++) {
+                        if (children[ci].material && children[ci].material.color &&
+                            children[ci].material.color.getHex() === 0x88ff88) {
+                            children[ci].material.opacity = 0.3 + glint * 0.7;
+                        }
+                    }
+                }
+            }
 
             trap.cooldownTimer = Math.max(0, trap.cooldownTimer - dt);
             if (trap.cooldownTimer > 0) continue;

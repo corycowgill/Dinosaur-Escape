@@ -770,6 +770,15 @@ DE.DinoManager = {
             dino.mesh.position.y = 0.1 + (dino.currentSpeed > 0 ? Math.abs(Math.sin(dino.animPhase)) * 0.08 : 0);
             if (dino.bodyMesh && dino.currentSpeed > 0) dino.bodyMesh.rotation.z = Math.sin(dino.animPhase * 0.8) * 0.03;
 
+            // Footstep dust puffs
+            if (dino.currentSpeed > 0) {
+                dino.dustTimer = (dino.dustTimer || 0) - dt;
+                if (dino.dustTimer <= 0) {
+                    dino.dustTimer = 0.3 / (dino.currentSpeed * 0.5);
+                    this.spawnDust(dino.x, dino.z, dino.type.scale, scene);
+                }
+            }
+
             var hpRatio = dino.hp / dino.maxHp;
             dino.hpFill.scale.x = Math.max(0.01, hpRatio);
             dino.hpFill.position.x = -(0.96 * (1 - hpRatio)) / 2;
@@ -821,6 +830,26 @@ DE.DinoManager = {
         sprite.position.set(x, y, z);
         scene.add(sprite);
         this.floaters.push({ sprite: sprite, life: 1.0, vy: 1.5 });
+    },
+
+    spawnDust: function(x, z, scale, scene) {
+        var count = 1 + Math.floor(scale * 2);
+        for (var d = 0; d < count; d++) {
+            var size = 0.03 + Math.random() * 0.04 * scale;
+            var dust = new THREE.Mesh(
+                new THREE.SphereGeometry(size, 4, 3),
+                new THREE.MeshBasicMaterial({ color: 0xaa9977, transparent: true, opacity: 0.35 })
+            );
+            dust.position.set(
+                x + (Math.random() - 0.5) * scale * 0.8,
+                0.05 + Math.random() * 0.15,
+                z + (Math.random() - 0.5) * scale * 0.8
+            );
+            scene.add(dust);
+            (function(m) {
+                setTimeout(function() { if (m.parent) m.parent.remove(m); }, 350 + Math.random() * 200);
+            })(dust);
+        }
     },
 
     updateFloaters: function(dt, camera) {

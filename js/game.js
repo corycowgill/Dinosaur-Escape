@@ -143,6 +143,7 @@ DE.Game = {
             DE.WaveManager.update(gameDt, DE.DinoManager, scene);
             DE.DinoManager.update(gameDt, waypoints, this.state, scene);
             DE.TrapManager.update(gameDt, DE.DinoManager.getAliveDinos(), scene);
+            DE.Map.updateAnimations(gameDt);
 
             // Update floating damage numbers
             DE.DinoManager.updateFloaters(dt, DE.Renderer.camera);

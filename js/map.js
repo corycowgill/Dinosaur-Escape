@@ -3,6 +3,8 @@ window.DE = window.DE || {};
 DE.Map = {
     grid: [],
     waypoints: [],
+    animObjects: [],
+    animTime: 0,
 
     buildLayout: function() {
         var cols = DE.CONFIG.GRID_COLS, rows = DE.CONFIG.GRID_ROWS;
@@ -42,6 +44,8 @@ DE.Map = {
     },
 
     createScene: function(scene) {
+        this.animObjects = [];
+        this.animTime = 0;
         var cs = DE.CONFIG.CELL_SIZE, cols = DE.CONFIG.GRID_COLS, rows = DE.CONFIG.GRID_ROWS;
         // Large ground base
         var gp = new THREE.Mesh(new THREE.PlaneGeometry(cols * cs + 20, rows * cs + 20),
@@ -115,26 +119,54 @@ DE.Map = {
                 } else if (cell.type === 'fence') {
                     this.addElectricFence(scene, pos.x, pos.z, cs, c, r, cols, rows);
                 } else {
-                    // Ground tile with shade variation
-                    var gShade = 0.85 + Math.random() * 0.3;
+                    // Ground tile with shade variation and Perlin-like noise
+                    var noiseVal = Math.sin(c * 1.3 + r * 0.7) * 0.5 + Math.sin(c * 0.4 + r * 2.1) * 0.3;
+                    var gShade = 0.8 + noiseVal * 0.15 + Math.random() * 0.15;
+                    var baseGreen = new THREE.Color(0x2a6b1a).multiplyScalar(gShade);
+                    // Slight hue variation per tile
+                    if ((c + r) % 5 === 0) baseGreen.lerp(new THREE.Color(0x3a7a22), 0.3);
+                    if ((c * 3 + r * 7) % 11 === 0) baseGreen.lerp(new THREE.Color(0x226618), 0.2);
                     var gnd = new THREE.Mesh(new THREE.BoxGeometry(cs, 0.05, cs),
-                        new THREE.MeshStandardMaterial({ color: new THREE.Color(0x2a6b1a).multiplyScalar(gShade), roughness: 0.9 }));
+                        new THREE.MeshStandardMaterial({ color: baseGreen, roughness: 0.9 }));
                     gnd.position.set(pos.x, 0.025, pos.z);
                     gnd.receiveShadow = true;
                     scene.add(gnd);
-                    // Grass tufts - small vertical planes
-                    if (Math.random() < 0.5) {
-                        var tuftCount = 1 + Math.floor(Math.random() * 3);
+                    // Grass tufts - crossed planes for 3D look
+                    if (Math.random() < 0.6) {
+                        var tuftCount = 2 + Math.floor(Math.random() * 3);
+                        var grassColors = [0x2d8c1a, 0x34951f, 0x267a15, 0x3a9e28, 0x1f6612];
                         for (var t = 0; t < tuftCount; t++) {
-                            var tuftH = 0.08 + Math.random() * 0.12;
-                            var tuft = new THREE.Mesh(
-                                new THREE.PlaneGeometry(0.06, tuftH),
-                                new THREE.MeshStandardMaterial({ color: new THREE.Color(0x2d8c1a).multiplyScalar(0.8 + Math.random() * 0.4),
-                                    roughness: 0.9, side: THREE.DoubleSide }));
-                            tuft.position.set(pos.x + (Math.random() - 0.5) * cs * 0.8,
-                                tuftH / 2 + 0.05, pos.z + (Math.random() - 0.5) * cs * 0.8);
-                            tuft.rotation.y = Math.random() * Math.PI;
-                            scene.add(tuft);
+                            var tuftH = 0.08 + Math.random() * 0.15;
+                            var tuftColor = grassColors[Math.floor(Math.random() * grassColors.length)];
+                            var tuftMat = new THREE.MeshStandardMaterial({
+                                color: tuftColor, roughness: 0.85, side: THREE.DoubleSide });
+                            var tuftX = pos.x + (Math.random() - 0.5) * cs * 0.8;
+                            var tuftZ = pos.z + (Math.random() - 0.5) * cs * 0.8;
+                            // Two crossed planes per tuft for volume
+                            var tuft1 = new THREE.Mesh(new THREE.PlaneGeometry(0.07, tuftH), tuftMat);
+                            tuft1.position.set(tuftX, tuftH / 2 + 0.05, tuftZ);
+                            tuft1.rotation.y = Math.random() * Math.PI;
+                            scene.add(tuft1);
+                            var tuft2 = new THREE.Mesh(new THREE.PlaneGeometry(0.06, tuftH * 0.9), tuftMat);
+                            tuft2.position.set(tuftX, tuftH * 0.45 + 0.05, tuftZ);
+                            tuft2.rotation.y = tuft1.rotation.y + Math.PI * 0.5;
+                            scene.add(tuft2);
+                        }
+                    }
+                    // Clover/wildflower patches
+                    if (Math.random() < 0.08) {
+                        var flowerColors = [0xffdd55, 0xffffff, 0xbb88ff, 0xff88aa];
+                        var fc = flowerColors[Math.floor(Math.random() * flowerColors.length)];
+                        for (var fl = 0; fl < 3 + Math.floor(Math.random() * 3); fl++) {
+                            var petal = new THREE.Mesh(new THREE.SphereGeometry(0.015, 3, 3),
+                                new THREE.MeshBasicMaterial({ color: fc }));
+                            petal.position.set(
+                                pos.x + (Math.random() - 0.5) * cs * 0.5,
+                                0.06,
+                                pos.z + (Math.random() - 0.5) * cs * 0.5
+                            );
+                            petal.scale.y = 0.4;
+                            scene.add(petal);
                         }
                     }
                     // Occasional dirt patches
@@ -145,14 +177,32 @@ DE.Map = {
                             pos.z + (Math.random() - 0.5) * 0.5);
                         scene.add(dirt);
                     }
-                    // Small stones
-                    if (Math.random() < 0.1) {
-                        var stone = new THREE.Mesh(new THREE.SphereGeometry(0.03, 3, 3),
-                            new THREE.MeshStandardMaterial({ color: 0x888877, roughness: 0.9 }));
-                        stone.scale.y = 0.5;
-                        stone.position.set(pos.x + (Math.random() - 0.5) * 0.6, 0.06,
+                    // Small stones with varied colors
+                    if (Math.random() < 0.12) {
+                        var stoneColor = [0x888877, 0x777766, 0x999988, 0x6a6a60][Math.floor(Math.random() * 4)];
+                        var stone = new THREE.Mesh(new THREE.DodecahedronGeometry(0.03 + Math.random() * 0.02, 0),
+                            new THREE.MeshStandardMaterial({ color: stoneColor, roughness: 0.9 }));
+                        stone.scale.y = 0.4 + Math.random() * 0.3;
+                        stone.rotation.y = Math.random() * Math.PI;
+                        stone.position.set(pos.x + (Math.random() - 0.5) * 0.6, 0.05,
                             pos.z + (Math.random() - 0.5) * 0.6);
                         scene.add(stone);
+                    }
+                    // Fallen leaves
+                    if (Math.random() < 0.06) {
+                        var leafColors = [0x8a6a20, 0x996b33, 0xaa7744, 0x776622];
+                        for (var lf = 0; lf < 2; lf++) {
+                            var leafMat = new THREE.MeshStandardMaterial({
+                                color: leafColors[Math.floor(Math.random() * leafColors.length)],
+                                roughness: 1, side: THREE.DoubleSide });
+                            var leaf = new THREE.Mesh(new THREE.PlaneGeometry(0.05 + Math.random() * 0.04, 0.03 + Math.random() * 0.02), leafMat);
+                            leaf.rotation.x = -Math.PI / 2 + (Math.random() - 0.5) * 0.2;
+                            leaf.rotation.z = Math.random() * Math.PI;
+                            leaf.position.set(
+                                pos.x + (Math.random() - 0.5) * cs * 0.6, 0.06,
+                                pos.z + (Math.random() - 0.5) * cs * 0.6);
+                            scene.add(leaf);
+                        }
                     }
                 }
             }
@@ -179,6 +229,8 @@ DE.Map = {
         this.addPaddockSigns(scene, cs);
         this.addAmbientProps(scene, cs);
         this.addFogBorder(scene, cs, cols, rows);
+        this.addPathArrows(scene, cs);
+        this.addButterflies(scene, cs, cols, rows);
     },
 
     addElectricFence: function(scene, x, z, cs, c, r, cols, rows) {
@@ -231,12 +283,13 @@ DE.Map = {
             var w = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, cs), wireMat);
             w.position.set(x, 0.5 + h * 0.45, z); scene.add(w);
         }
-        // Spark effect between wires (small yellow sphere)
-        if (Math.random() < 0.3) {
-            var spark = new THREE.Mesh(new THREE.SphereGeometry(0.03, 3, 3),
-                new THREE.MeshBasicMaterial({ color: 0xffff44 }));
+        // Spark effect between wires (animated)
+        if (Math.random() < 0.4) {
+            var sparkMat = new THREE.MeshBasicMaterial({ color: 0xffff44, transparent: true, opacity: 1.0 });
+            var spark = new THREE.Mesh(new THREE.SphereGeometry(0.03, 3, 3), sparkMat);
             spark.position.set(x + (Math.random() - 0.5) * 0.1, 0.7 + Math.random() * 1.2, z);
             scene.add(spark);
+            this.animObjects.push({ type: 'spark', mesh: spark, baseX: x, baseZ: z, seed: c * 3.7 + r * 2.1 });
         }
         // Transformer box on some posts
         if ((c + r) % 4 === 0) {
@@ -602,16 +655,18 @@ DE.Map = {
             // Deep center
             var deep = new THREE.Mesh(new THREE.CircleGeometry(cs * 0.3, 10), deepWm);
             deep.rotation.x = -Math.PI / 2; deep.position.set(pos.x, 0.058, pos.z); scene.add(deep);
-            // Water surface
+            // Water surface (animated)
             var water = new THREE.Mesh(new THREE.CircleGeometry(cs * 0.45, 12), wm);
             water.rotation.x = -Math.PI / 2; water.position.set(pos.x, 0.06, pos.z); scene.add(water);
-            // Ripple rings
-            for (var rr = 0; rr < 2; rr++) {
+            this.animObjects.push({ type: 'water', mesh: water, baseY: 0.06, cx: pos.x, cz: pos.z, seed: i * 2.3 });
+            // Ripple rings (animated)
+            for (var rr = 0; rr < 3; rr++) {
                 var ripple = new THREE.Mesh(new THREE.RingGeometry(0.12 + rr * 0.15, 0.14 + rr * 0.15, 12),
                     new THREE.MeshBasicMaterial({ color: 0xaaddee, transparent: true, opacity: 0.2, side: THREE.DoubleSide }));
                 ripple.rotation.x = -Math.PI / 2;
                 ripple.position.set(pos.x + (Math.random() - 0.5) * 0.3, 0.065, pos.z + (Math.random() - 0.5) * 0.3);
                 scene.add(ripple);
+                this.animObjects.push({ type: 'ripple', mesh: ripple, baseOpacity: 0.2, seed: i * 3.1 + rr * 1.7 });
             }
             // Lily pads
             var lilyCount = 1 + Math.floor(Math.random() * 3);
@@ -895,7 +950,7 @@ DE.Map = {
             jg.rotation.y = 0.3;
             scene.add(jg);
         }
-        // Tiki torches along path edges
+        // Tiki torches along path edges - with point lights and animated flames
         var torchCells = [{c:2, r:2}, {c:15, r:4}, {c:5, r:6}, {c:15, r:8}];
         for (var ti = 0; ti < torchCells.length; ti++) {
             var tc = torchCells[ti];
@@ -910,7 +965,7 @@ DE.Map = {
             var cup = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.04, 0.12, 5),
                 new THREE.MeshStandardMaterial({ color: 0x554433, roughness: 0.7 }));
             cup.position.y = 1.2; tg.add(cup);
-            // Flame
+            // Flame (animated)
             var flame = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.15, 4),
                 new THREE.MeshBasicMaterial({ color: 0xff6600 }));
             flame.position.y = 1.35; tg.add(flame);
@@ -918,8 +973,18 @@ DE.Map = {
             var flameInner = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.1, 4),
                 new THREE.MeshBasicMaterial({ color: 0xffcc44 }));
             flameInner.position.y = 1.33; tg.add(flameInner);
+            // Flame glow (outer)
+            var flameGlow = new THREE.Mesh(new THREE.SphereGeometry(0.08, 5, 4),
+                new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.2 }));
+            flameGlow.position.y = 1.35; tg.add(flameGlow);
+            // Point light for warm illumination
+            var torchLight = new THREE.PointLight(0xff6622, 0.6, 4, 2);
+            torchLight.position.y = 1.35;
+            tg.add(torchLight);
             tg.position.set(tpos.x, 0, tpos.z);
             scene.add(tg);
+            // Store for animation
+            this.animObjects.push({ type: 'flame', flame: flame, flameInner: flameInner, glow: flameGlow, light: torchLight, seed: ti * 1.7 });
         }
     },
 
@@ -1080,6 +1145,129 @@ DE.Map = {
         g.position.set(x + (Math.random() - 0.5) * 0.4, 0, z + (Math.random() - 0.5) * 0.4);
         g.rotation.y = Math.random() * Math.PI;
         scene.add(g);
+    },
+
+    addPathArrows: function(scene, cs) {
+        // Directional arrows on path cells showing dino travel direction
+        var arrowMat = new THREE.MeshBasicMaterial({ color: 0xffcc44, transparent: true, opacity: 0.2, side: THREE.DoubleSide });
+        for (var i = 2; i < this.waypoints.length - 1; i += 3) {
+            var wp = this.waypoints[i];
+            var next = this.waypoints[Math.min(i + 1, this.waypoints.length - 1)];
+            var dx = next.x - wp.x, dz = next.z - wp.z;
+            var angle = Math.atan2(dx, dz);
+            // Arrow shape using a triangle
+            var arrowGeo = new THREE.BufferGeometry();
+            var s = cs * 0.18;
+            var verts = new Float32Array([
+                0, 0, s,  -s * 0.6, 0, -s * 0.3,  s * 0.6, 0, -s * 0.3
+            ]);
+            arrowGeo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+            arrowGeo.computeVertexNormals();
+            var arrow = new THREE.Mesh(arrowGeo, arrowMat);
+            arrow.position.set(wp.x, 0.1, wp.z);
+            arrow.rotation.y = angle;
+            scene.add(arrow);
+        }
+    },
+
+    addButterflies: function(scene, cs, cols, rows) {
+        // Ambient butterflies floating around
+        var bfColors = [0xff88cc, 0xffcc44, 0x88ccff, 0xaaff88, 0xffaa55, 0xcc88ff];
+        for (var bi = 0; bi < 8; bi++) {
+            var bfGroup = new THREE.Group();
+            var color = bfColors[bi % bfColors.length];
+            var wingMat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.7, side: THREE.DoubleSide });
+            // Left wing
+            var lwGeo = new THREE.BufferGeometry();
+            var lwVerts = new Float32Array([0,0,0, -0.08,0.02,0.04, -0.06,0.03,-0.04]);
+            lwGeo.setAttribute('position', new THREE.BufferAttribute(lwVerts, 3));
+            lwGeo.computeVertexNormals();
+            var lw = new THREE.Mesh(lwGeo, wingMat);
+            bfGroup.add(lw);
+            // Right wing
+            var rwGeo = new THREE.BufferGeometry();
+            var rwVerts = new Float32Array([0,0,0, 0.08,0.02,0.04, 0.06,0.03,-0.04]);
+            rwGeo.setAttribute('position', new THREE.BufferAttribute(rwVerts, 3));
+            rwGeo.computeVertexNormals();
+            var rw = new THREE.Mesh(rwGeo, wingMat);
+            bfGroup.add(rw);
+            // Tiny body
+            var body = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.03, 3),
+                new THREE.MeshBasicMaterial({ color: 0x222222 }));
+            body.rotation.x = Math.PI / 2;
+            bfGroup.add(body);
+            // Random position over the map
+            var bx = 2 + Math.random() * (cols * cs - 4);
+            var bz = 2 + Math.random() * (rows * cs - 4);
+            bfGroup.position.set(bx, 1.0 + Math.random() * 1.5, bz);
+            scene.add(bfGroup);
+            this.animObjects.push({
+                type: 'butterfly', group: bfGroup, lw: lw, rw: rw,
+                baseX: bx, baseZ: bz, baseY: bfGroup.position.y,
+                seed: bi * 2.3, radius: 1.5 + Math.random() * 2
+            });
+        }
+    },
+
+    updateAnimations: function(dt) {
+        this.animTime += dt;
+        var t = this.animTime;
+        for (var i = 0; i < this.animObjects.length; i++) {
+            var obj = this.animObjects[i];
+            switch (obj.type) {
+                case 'flame':
+                    // Flickering flame scale and position
+                    var flicker = Math.sin(t * 12 + obj.seed) * 0.3 + Math.sin(t * 7.3 + obj.seed * 2) * 0.2;
+                    obj.flame.scale.y = 0.8 + flicker * 0.4;
+                    obj.flame.scale.x = 0.9 + Math.sin(t * 9 + obj.seed) * 0.15;
+                    obj.flame.position.x = Math.sin(t * 5 + obj.seed) * 0.01;
+                    obj.flameInner.scale.y = 0.7 + flicker * 0.5;
+                    obj.glow.scale.set(
+                        0.8 + Math.sin(t * 8 + obj.seed) * 0.3,
+                        0.8 + Math.sin(t * 6 + obj.seed) * 0.3,
+                        0.8 + Math.sin(t * 8 + obj.seed) * 0.3
+                    );
+                    obj.glow.material.opacity = 0.15 + Math.sin(t * 10 + obj.seed) * 0.08;
+                    // Flickering light intensity
+                    obj.light.intensity = 0.4 + flicker * 0.3;
+                    break;
+                case 'water':
+                    // Gentle bobbing water surface
+                    obj.mesh.position.y = obj.baseY + Math.sin(t * 1.5 + obj.seed) * 0.008;
+                    obj.mesh.rotation.z = Math.sin(t * 0.8 + obj.seed) * 0.02;
+                    break;
+                case 'ripple':
+                    // Pulsing ripple opacity
+                    var pulse = Math.sin(t * 2 + obj.seed) * 0.5 + 0.5;
+                    obj.mesh.material.opacity = obj.baseOpacity * (0.3 + pulse * 0.7);
+                    var scaleP = 0.8 + pulse * 0.4;
+                    obj.mesh.scale.set(scaleP, scaleP, 1);
+                    break;
+                case 'spark':
+                    // Random sparking - blink on/off, jump position
+                    var sparkOn = Math.sin(t * 15 + obj.seed) > 0.6 || Math.sin(t * 23 + obj.seed * 3) > 0.8;
+                    obj.mesh.visible = sparkOn;
+                    if (sparkOn) {
+                        obj.mesh.position.x = obj.baseX + (Math.sin(t * 31 + obj.seed) * 0.5 - 0.25) * 0.15;
+                        obj.mesh.position.y = 0.7 + ((Math.sin(t * 17 + obj.seed) + 1) * 0.5) * 1.2;
+                        obj.mesh.scale.setScalar(0.5 + Math.random() * 1.0);
+                    }
+                    break;
+                case 'butterfly':
+                    // Erratic fluttering path
+                    var bTime = t * 0.8 + obj.seed;
+                    obj.group.position.x = obj.baseX + Math.sin(bTime * 0.7) * obj.radius + Math.sin(bTime * 1.9) * 0.3;
+                    obj.group.position.z = obj.baseZ + Math.cos(bTime * 0.5) * obj.radius + Math.cos(bTime * 2.3) * 0.3;
+                    obj.group.position.y = obj.baseY + Math.sin(bTime * 1.3) * 0.5 + Math.sin(bTime * 3.1) * 0.15;
+                    // Wing flapping
+                    var wingAngle = Math.sin(t * 15 + obj.seed) * 0.6;
+                    obj.lw.rotation.z = wingAngle;
+                    obj.rw.rotation.z = -wingAngle;
+                    // Face direction of travel
+                    obj.group.rotation.y = bTime * 0.7;
+                    break;
+            }
+        }
     },
 
     addFogBorder: function(scene, cs, cols, rows) {
