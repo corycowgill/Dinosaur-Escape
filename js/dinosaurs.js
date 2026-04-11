@@ -2,6 +2,7 @@ window.DE = window.DE || {};
 
 DE.DinoManager = {
     dinos: [],
+    floaters: [],
 
     spawnDino: function(typeName, scene) {
         var typeData = DE.DINO_TYPES[typeName];
@@ -768,39 +769,109 @@ DE.DinoManager = {
         if (!dino.alive) return;
         dino.hp -= amount;
         DE.Audio.playSound('hit');
+        // Floating damage number
+        this.spawnFloater(dino.x, dino.type.scale * 3 + 1, dino.z, '-' + amount, 0xff4444, scene);
         if (dino.hp <= 0) {
             dino.alive = false;
             gameState.score += dino.type.points;
             gameState.cash += dino.type.cash;
+            gameState.kills = (gameState.kills || 0) + 1;
+            gameState.totalCashEarned = (gameState.totalCashEarned || 0) + dino.type.cash;
             DE.HUD.updateScore(gameState.score);
             DE.HUD.updateCash(gameState.cash);
             DE.Audio.playSound('kill');
+            // Cash and points floaters
+            this.spawnFloater(dino.x + 0.3, dino.type.scale * 3 + 1.5, dino.z, '+$' + dino.type.cash, 0xffdd44, scene);
+            this.spawnFloater(dino.x - 0.3, dino.type.scale * 3 + 2, dino.z, '+' + dino.type.points, 0x44ff44, scene);
             this.deathEffect(dino, scene);
             if (dino.mesh.parent) dino.mesh.parent.remove(dino.mesh);
         }
     },
 
-    deathEffect: function(dino, scene) {
-        var colors = [0xffff00, 0xff8800, 0xffffff];
-        for (var i = 0; i < 8; i++) {
-            var p = new THREE.Mesh(new THREE.SphereGeometry(0.12, 4, 4),
-                new THREE.MeshBasicMaterial({ color: colors[i % 3], transparent: true, opacity: 0.9 }));
-            p.position.set(dino.x + (Math.random() - 0.5) * 1.5, 0.5 + Math.random() * 1.5, dino.z + (Math.random() - 0.5) * 1.5);
-            scene.add(p);
-            (function(m) { setTimeout(function() { scene.remove(m); }, 400); })(p);
+    spawnFloater: function(x, y, z, text, color, scene) {
+        // Create a small sprite-like group for floating text
+        var canvas = document.createElement('canvas');
+        canvas.width = 128; canvas.height = 48;
+        var ctx = canvas.getContext('2d');
+        ctx.font = 'bold 28px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#000'; ctx.fillText(text, 65, 34);
+        ctx.fillStyle = '#' + color.toString(16).padStart(6, '0');
+        ctx.fillText(text, 64, 32);
+        var tex = new THREE.CanvasTexture(canvas);
+        var mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+        var sprite = new THREE.Sprite(mat);
+        sprite.scale.set(1.2, 0.45, 1);
+        sprite.position.set(x, y, z);
+        scene.add(sprite);
+        this.floaters.push({ sprite: sprite, life: 1.0, vy: 1.5 });
+    },
+
+    updateFloaters: function(dt, camera) {
+        for (var i = this.floaters.length - 1; i >= 0; i--) {
+            var f = this.floaters[i];
+            f.life -= dt * 1.2;
+            f.sprite.position.y += f.vy * dt;
+            f.vy *= 0.97;
+            f.sprite.material.opacity = Math.max(0, f.life);
+            if (f.life <= 0) {
+                if (f.sprite.parent) f.sprite.parent.remove(f.sprite);
+                f.sprite.material.map.dispose();
+                f.sprite.material.dispose();
+                this.floaters.splice(i, 1);
+            }
         }
+    },
+
+    deathEffect: function(dino, scene) {
+        var colors = [0xffff00, 0xff8800, 0xffffff, 0xff4400, 0xffcc00];
+        // More particles, varied sizes
+        for (var i = 0; i < 14; i++) {
+            var size = 0.06 + Math.random() * 0.12;
+            var p = new THREE.Mesh(new THREE.SphereGeometry(size, 4, 4),
+                new THREE.MeshBasicMaterial({ color: colors[i % colors.length], transparent: true, opacity: 0.9 }));
+            p.position.set(
+                dino.x + (Math.random() - 0.5) * 2.0,
+                0.3 + Math.random() * 2.0,
+                dino.z + (Math.random() - 0.5) * 2.0
+            );
+            scene.add(p);
+            (function(m, delay) { setTimeout(function() { scene.remove(m); }, delay); })(p, 300 + Math.random() * 400);
+        }
+        // Ground scorch mark
+        var scorch = new THREE.Mesh(
+            new THREE.CircleGeometry(0.3 + dino.type.scale * 0.5, 8),
+            new THREE.MeshBasicMaterial({ color: 0x332200, transparent: true, opacity: 0.3, side: THREE.DoubleSide })
+        );
+        scorch.rotation.x = -Math.PI / 2;
+        scorch.position.set(dino.x, 0.06, dino.z);
+        scene.add(scorch);
+        setTimeout(function() { scene.remove(scorch); }, 3000);
     },
 
     escapeDino: function(dino, gameState, scene) {
         dino.alive = false;
         gameState.lives--;
+        gameState.escaped = (gameState.escaped || 0) + 1;
         DE.HUD.updateLives(gameState.lives, DE.CONFIG.MAX_LIVES);
         DE.Audio.playSound('escape');
-        var flash = new THREE.Mesh(new THREE.SphereGeometry(0.6, 8, 8),
-            new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.6 }));
+        // Escape warning text
+        this.spawnFloater(dino.x, 2, dino.z, 'ESCAPED!', 0xff0000, scene);
+        // Red flash burst
+        var flash = new THREE.Mesh(new THREE.SphereGeometry(0.8, 10, 8),
+            new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.5 }));
         flash.position.set(dino.x, 0.5, dino.z);
         scene.add(flash);
-        setTimeout(function() { scene.remove(flash); }, 400);
+        setTimeout(function() { scene.remove(flash); }, 500);
+        // Warning ring expanding
+        var ring = new THREE.Mesh(
+            new THREE.RingGeometry(0.5, 1.5, 12),
+            new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.4, side: THREE.DoubleSide })
+        );
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.set(dino.x, 0.3, dino.z);
+        scene.add(ring);
+        setTimeout(function() { scene.remove(ring); }, 600);
         if (dino.mesh.parent) dino.mesh.parent.remove(dino.mesh);
     },
 

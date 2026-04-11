@@ -89,6 +89,15 @@ DE.WaveManager = {
         return template;
     },
 
+    getNextWaveInfo: function(waveNum) {
+        var template = this.getWaveTemplate(waveNum);
+        var info = [];
+        for (var i = 0; i < template.length; i++) {
+            info.push({ type: template[i].type, count: template[i].count });
+        }
+        return info;
+    },
+
     update: function(dt, dinoManager, scene) {
         if (this.betweenWaves) {
             this.waveDelay -= dt;
@@ -120,6 +129,7 @@ DE.WaveManager = {
             DE.Game.state.cash += bonus;
             DE.HUD.updateCash(DE.Game.state.cash);
             DE.HUD.showWaveBanner('WAVE ' + this.currentWave + ' CLEAR! +$' + bonus);
+            DE.HUD.updateWavePreview(this.getNextWaveInfo(this.currentWave + 1));
         }
     },
 

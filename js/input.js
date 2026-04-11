@@ -28,13 +28,28 @@ DE.Input = {
         this.canvas.addEventListener('pointermove', function(e) {
             if (e.pointerType === 'touch') return;
             var world = DE.Renderer.screenToWorld(e.clientX, e.clientY);
-            if (world) { self.hoverGridPos = DE.Map.worldToGrid(world.x, world.z); self.useGridCursor = false; }
+            if (world) {
+                self.hoverGridPos = DE.Map.worldToGrid(world.x, world.z);
+                self.useGridCursor = false;
+                if (self.callbacks.onHover) self.callbacks.onHover(self.hoverGridPos.col, self.hoverGridPos.row);
+            }
         });
         this.canvas.addEventListener('pointerdown', function(e) {
             if (e.pointerType === 'touch') return;
+            if (e.button !== 0) return; // left click only
             if (!DE.Game.state || !DE.Game.state.started || DE.Game.state.gameOver) return;
             var world = DE.Renderer.screenToWorld(e.clientX, e.clientY);
             if (world) { var g = DE.Map.worldToGrid(world.x, world.z); self.callbacks.onPlace(g.col, g.row); }
+        });
+        // Right-click to sell
+        this.canvas.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+            if (!DE.Game.state || !DE.Game.state.started || DE.Game.state.gameOver) return;
+            var world = DE.Renderer.screenToWorld(e.clientX, e.clientY);
+            if (world) {
+                var g = DE.Map.worldToGrid(world.x, world.z);
+                if (self.callbacks.onSell) self.callbacks.onSell(g.col, g.row);
+            }
         });
         // Scroll: zoom (hold shift) or cycle traps
         this.canvas.addEventListener('wheel', function(e) {
@@ -61,9 +76,21 @@ DE.Input = {
             if (e.key === '=' || e.key === '+') { DE.Renderer.setZoom(DE.Renderer.zoomLevel + 0.2); return; }
             if (e.key === '-' || e.key === '_') { DE.Renderer.setZoom(DE.Renderer.zoomLevel - 0.2); return; }
 
-            if (!DE.Game.state || !DE.Game.state.started || DE.Game.state.gameOver) return;
+            // Pause
+            if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+                if (self.callbacks.onPause) self.callbacks.onPause();
+                return;
+            }
+
+            if (!DE.Game.state || !DE.Game.state.started || DE.Game.state.gameOver || DE.Game.state.paused) return;
             var num = parseInt(e.key);
             if (num >= 1 && num <= 5) { self.callbacks.onSelectTrap(num - 1); return; }
+
+            // Sell trap at cursor
+            if (e.key === 'x' || e.key === 'X') {
+                if (self.callbacks.onSell) self.callbacks.onSell(self.cursorGridPos.col, self.cursorGridPos.row);
+                return;
+            }
 
             self.useGridCursor = true;
             var moved = false;
@@ -80,16 +107,22 @@ DE.Input = {
                     e.preventDefault();
                     self.callbacks.onPlace(self.cursorGridPos.col, self.cursorGridPos.row); break;
             }
-            if (moved) self.updateCursorIndicator(self.cursorGridPos.col, self.cursorGridPos.row);
+            if (moved) {
+                self.updateCursorIndicator(self.cursorGridPos.col, self.cursorGridPos.row);
+                if (self.callbacks.onHover) self.callbacks.onHover(self.cursorGridPos.col, self.cursorGridPos.row);
+            }
         });
     },
 
     setupTouch: function() {
         var self = this;
         // Tap on canvas to place trap / pinch to zoom
+        self.longPressTimer = null;
+        self.longPressGrid = null;
         this.canvas.addEventListener('touchstart', function(e) {
             if (e.touches.length === 2) {
                 // Pinch zoom start
+                if (self.longPressTimer) { clearTimeout(self.longPressTimer); self.longPressTimer = null; }
                 var dx = e.touches[0].clientX - e.touches[1].clientX;
                 var dy = e.touches[0].clientY - e.touches[1].clientY;
                 self.pinchStartDist = Math.sqrt(dx * dx + dy * dy);
@@ -101,7 +134,26 @@ DE.Input = {
             e.preventDefault();
             var touch = e.touches[0];
             var world = DE.Renderer.screenToWorld(touch.clientX, touch.clientY);
-            if (world) { var g = DE.Map.worldToGrid(world.x, world.z); self.callbacks.onPlace(g.col, g.row); }
+            if (world) {
+                var g = DE.Map.worldToGrid(world.x, world.z);
+                self.longPressGrid = g;
+                // Long press to sell (500ms)
+                self.longPressTimer = setTimeout(function() {
+                    if (self.callbacks.onSell) self.callbacks.onSell(g.col, g.row);
+                    self.longPressGrid = null;
+                }, 500);
+            }
+        }, { passive: false });
+        this.canvas.addEventListener('touchend', function(e) {
+            if (self.longPressTimer) {
+                clearTimeout(self.longPressTimer);
+                self.longPressTimer = null;
+                // Short tap = place
+                if (self.longPressGrid) {
+                    self.callbacks.onPlace(self.longPressGrid.col, self.longPressGrid.row);
+                    self.longPressGrid = null;
+                }
+            }
         }, { passive: false });
 
         this.canvas.addEventListener('touchmove', function(e) {
@@ -155,6 +207,10 @@ DE.Input = {
         document.getElementById('restart-btn').addEventListener('click', function(e) {
             e.preventDefault(); debounceCall(function() { self.callbacks.onRestart(); }, restartGuard);
         });
+        var resumeGuard = { t: 0 };
+        document.getElementById('resume-btn').addEventListener('click', function(e) {
+            e.preventDefault(); debounceCall(function() { if (self.callbacks.onPause) self.callbacks.onPause(); }, resumeGuard);
+        });
         document.getElementById('trap-bar').addEventListener('click', function(e) {
             var btn = e.target.closest('.trap-btn');
             if (btn) self.callbacks.onSelectTrap(parseInt(btn.dataset.index));
@@ -190,10 +246,19 @@ DE.Input = {
         var gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
         var gp = null;
         for (var i = 0; i < gamepads.length; i++) if (gamepads[i]) { gp = gamepads[i]; break; }
-        if (!gp || !DE.Game.state || !DE.Game.state.started || DE.Game.state.gameOver) return;
+        if (!gp || !DE.Game.state || !DE.Game.state.started) return;
 
         this.gamepadCooldown = Math.max(0, this.gamepadCooldown - 1);
         if (this.gamepadCooldown > 0) return;
+
+        // Start button (9) = pause, works even when paused or game over
+        if (gp.buttons[9] && gp.buttons[9].pressed) {
+            if (this.callbacks.onPause) this.callbacks.onPause();
+            this.gamepadCooldown = 15;
+            return;
+        }
+
+        if (DE.Game.state.gameOver || DE.Game.state.paused) return;
         this.useGridCursor = true;
         var moved = false;
         var lx = gp.axes[0] || 0, ly = gp.axes[1] || 0, dz = 0.4;
@@ -204,6 +269,8 @@ DE.Input = {
         if ((gp.buttons[15] && gp.buttons[15].pressed) || lx > dz) { this.cursorGridPos.col = Math.min(DE.CONFIG.GRID_COLS - 1, this.cursorGridPos.col + 1); moved = true; }
 
         if (gp.buttons[0] && gp.buttons[0].pressed) { this.callbacks.onPlace(this.cursorGridPos.col, this.cursorGridPos.row); this.gamepadCooldown = 12; }
+        // Y button (3) = sell
+        if (gp.buttons[3] && gp.buttons[3].pressed) { if (this.callbacks.onSell) this.callbacks.onSell(this.cursorGridPos.col, this.cursorGridPos.row); this.gamepadCooldown = 12; }
         if (gp.buttons[4] && gp.buttons[4].pressed) { this.callbacks.onSelectTrap((DE.TrapManager.selectedTrapIndex - 1 + DE.TRAP_TYPES.length) % DE.TRAP_TYPES.length); this.gamepadCooldown = 12; }
         if (gp.buttons[5] && gp.buttons[5].pressed) { this.callbacks.onSelectTrap((DE.TrapManager.selectedTrapIndex + 1) % DE.TRAP_TYPES.length); this.gamepadCooldown = 12; }
         // Right trigger = zoom in, Left trigger = zoom out

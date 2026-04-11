@@ -53,6 +53,43 @@ DE.TrapManager = {
         return true;
     },
 
+    sellTrap: function(col, row, scene, gameState) {
+        if (row < 0 || row >= DE.CONFIG.GRID_ROWS || col < 0 || col >= DE.CONFIG.GRID_COLS) return false;
+        var cell = DE.Map.grid[row][col];
+        if (!cell.trap) return false;
+
+        var trap = cell.trap;
+        var refund = Math.floor(trap.type.cost * 0.5);
+        gameState.cash += refund;
+        DE.HUD.updateCash(gameState.cash);
+
+        // Remove mesh
+        if (trap.mesh && trap.mesh.parent) trap.mesh.parent.remove(trap.mesh);
+
+        // Sell effect - red ring
+        var pos = DE.Map.gridToWorld(col, row);
+        var ring = new THREE.Mesh(
+            new THREE.RingGeometry(0.1, 0.6, 10),
+            new THREE.MeshBasicMaterial({ color: 0xff8844, transparent: true, opacity: 0.5, side: THREE.DoubleSide })
+        );
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.set(pos.x, 0.2, pos.z);
+        scene.add(ring);
+        setTimeout(function() { scene.remove(ring); }, 300);
+
+        // Remove from traps array
+        var idx = this.traps.indexOf(trap);
+        if (idx >= 0) this.traps.splice(idx, 1);
+        cell.trap = null;
+
+        DE.Audio.playSound('place');
+
+        // Show refund as banner
+        DE.HUD.showWaveBanner('+$' + refund + ' (sold)');
+
+        return true;
+    },
+
     createTrapMesh: function(trapType) {
         var group = new THREE.Group();
         var cs = DE.CONFIG.CELL_SIZE;
