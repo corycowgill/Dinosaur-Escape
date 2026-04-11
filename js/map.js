@@ -90,14 +90,51 @@ DE.Map = {
                             edge2.position.set(pos.x + side * cs * 0.46, 0.06, pos.z);
                             scene.add(edge2);
                         }
+                        // Individual cobblestones (instead of flat surface)
+                        var cobbleMat = new THREE.MeshStandardMaterial({ color: 0x8a7a60, roughness: 0.85 });
+                        var cobbleDark = new THREE.MeshStandardMaterial({ color: 0x6a5a40, roughness: 0.9 });
+                        for (var cb = 0; cb < 6; cb++) {
+                            var cbSize = 0.12 + Math.random() * 0.08;
+                            var cobble = new THREE.Mesh(
+                                new THREE.BoxGeometry(cbSize, 0.03, cbSize * (0.7 + Math.random() * 0.4)),
+                                Math.random() < 0.5 ? cobbleMat : cobbleDark);
+                            cobble.position.set(
+                                pos.x + (Math.random() - 0.5) * cs * 0.7,
+                                0.09,
+                                pos.z + (Math.random() - 0.5) * cs * 0.7
+                            );
+                            cobble.rotation.y = Math.random() * Math.PI;
+                            scene.add(cobble);
+                        }
                         // Gravel pebbles on path
                         var pebbleMat = new THREE.MeshStandardMaterial({ color: 0x9a8a70, roughness: 0.9 });
-                        for (var p = 0; p < 4; p++) {
-                            var peb = new THREE.Mesh(new THREE.SphereGeometry(0.04 + Math.random() * 0.03, 3, 3), pebbleMat);
+                        for (var p = 0; p < 3; p++) {
+                            var peb = new THREE.Mesh(new THREE.SphereGeometry(0.03 + Math.random() * 0.02, 3, 3), pebbleMat);
                             peb.position.set(pos.x + (Math.random() - 0.5) * cs * 0.7, 0.09,
                                 pos.z + (Math.random() - 0.5) * cs * 0.7);
                             peb.scale.y = 0.4;
                             scene.add(peb);
+                        }
+                        // Weeds growing through cracks
+                        if (Math.random() < 0.15) {
+                            var weedMat = new THREE.MeshStandardMaterial({ color: 0x2d7a1a, roughness: 0.9, side: THREE.DoubleSide });
+                            for (var wd = 0; wd < 2; wd++) {
+                                var weedH = 0.06 + Math.random() * 0.06;
+                                var weed = new THREE.Mesh(new THREE.PlaneGeometry(0.04, weedH), weedMat);
+                                weed.position.set(pos.x + (Math.random()-0.5)*cs*0.5, weedH/2 + 0.08,
+                                    pos.z + (Math.random()-0.5)*cs*0.5);
+                                weed.rotation.y = Math.random() * Math.PI;
+                                scene.add(weed);
+                            }
+                        }
+                        // Puddles on some path tiles
+                        if (Math.random() < 0.08) {
+                            var puddleMat = new THREE.MeshStandardMaterial({
+                                color: 0x667788, roughness: 0.05, metalness: 0.4, transparent: true, opacity: 0.5 });
+                            var puddle = new THREE.Mesh(new THREE.CircleGeometry(0.15 + Math.random() * 0.15, 7), puddleMat);
+                            puddle.rotation.x = -Math.PI / 2;
+                            puddle.position.set(pos.x + (Math.random()-0.5)*0.4, 0.09, pos.z + (Math.random()-0.5)*0.4);
+                            scene.add(puddle);
                         }
                         // Worn center line
                         if ((c + r) % 4 === 0) {
@@ -105,6 +142,20 @@ DE.Map = {
                                 new THREE.MeshStandardMaterial({ color: 0x7a6a50, roughness: 1 }));
                             worn.position.set(pos.x, 0.09, pos.z);
                             scene.add(worn);
+                        }
+                        // Cracks in path
+                        if (Math.random() < 0.1) {
+                            var crackMat = new THREE.MeshStandardMaterial({ color: 0x3a2a15, roughness: 1 });
+                            var crackLen = 0.3 + Math.random() * 0.4;
+                            var crack = new THREE.Mesh(new THREE.BoxGeometry(crackLen, 0.005, 0.015), crackMat);
+                            crack.position.set(pos.x + (Math.random()-0.5)*0.4, 0.085, pos.z + (Math.random()-0.5)*0.4);
+                            crack.rotation.y = Math.random() * Math.PI;
+                            scene.add(crack);
+                            // Branch crack
+                            var crack2 = new THREE.Mesh(new THREE.BoxGeometry(crackLen * 0.5, 0.005, 0.012), crackMat);
+                            crack2.position.set(crack.position.x + 0.1, 0.085, crack.position.z + 0.05);
+                            crack2.rotation.y = crack.rotation.y + 0.5;
+                            scene.add(crack2);
                         }
                     }
                     // Tire tracks
@@ -704,6 +755,42 @@ DE.Map = {
                     cattail.position.set(rx, reedH + 0.05, rz); scene.add(cattail);
                 }
             }
+            // Dragonflies near water
+            if (Math.random() < 0.6) {
+                var dfGroup = new THREE.Group();
+                var dfBody = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.006, 0.06, 3),
+                    new THREE.MeshStandardMaterial({ color: 0x2266aa, metalness: 0.5, roughness: 0.3 }));
+                dfBody.rotation.x = Math.PI / 2;
+                dfGroup.add(dfBody);
+                // Wings (4 thin transparent planes)
+                var wingMat = new THREE.MeshBasicMaterial({ color: 0xccddff, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
+                for (var dfw = 0; dfw < 4; dfw++) {
+                    var dfWing = new THREE.Mesh(new THREE.PlaneGeometry(0.04, 0.015), wingMat);
+                    dfWing.position.set((dfw < 2 ? -1 : 1) * 0.02, 0.005, (dfw % 2 === 0 ? 0.01 : -0.01));
+                    dfWing.rotation.z = (dfw < 2 ? 1 : -1) * 0.3;
+                    dfGroup.add(dfWing);
+                }
+                dfGroup.position.set(pos.x + (Math.random()-0.5)*0.5, 0.3 + Math.random()*0.4, pos.z + (Math.random()-0.5)*0.5);
+                scene.add(dfGroup);
+                this.animObjects.push({
+                    type: 'dragonfly', group: dfGroup,
+                    baseX: dfGroup.position.x, baseY: dfGroup.position.y, baseZ: dfGroup.position.z,
+                    seed: i * 4.1 + Math.random() * 5
+                });
+            }
+            // Stepping stones in/near water
+            if (Math.random() < 0.4) {
+                var ssMat = new THREE.MeshStandardMaterial({ color: 0x888877, roughness: 0.9 });
+                for (var ss = 0; ss < 2; ss++) {
+                    var stepping = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.04, 6), ssMat);
+                    stepping.position.set(
+                        pos.x + (Math.random()-0.5)*cs*0.6,
+                        0.07,
+                        pos.z + (Math.random()-0.5)*cs*0.6
+                    );
+                    scene.add(stepping);
+                }
+            }
         }
     },
 
@@ -986,6 +1073,220 @@ DE.Map = {
             // Store for animation
             this.animObjects.push({ type: 'flame', flame: flame, flameInner: flameInner, glow: flameGlow, light: torchLight, seed: ti * 1.7 });
         }
+        // Park benches
+        var benchCells = [{c:8, r:4}, {c:12, r:6}, {c:6, r:8}];
+        for (var bi = 0; bi < benchCells.length; bi++) {
+            var bc = benchCells[bi];
+            if (bc.r >= rows || bc.c >= cols || this.grid[bc.r][bc.c].type !== 'ground') continue;
+            var bpos = this.gridToWorld(bc.c, bc.r);
+            var bench = new THREE.Group();
+            var woodMat = new THREE.MeshStandardMaterial({ color: 0x7a5530, roughness: 0.8 });
+            var ironMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.7, roughness: 0.3 });
+            // Seat planks
+            for (var sp = 0; sp < 3; sp++) {
+                var plank = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.03, 0.08), woodMat);
+                plank.position.set(0, 0.3, -0.06 + sp * 0.08); bench.add(plank);
+            }
+            // Back rest planks
+            for (var bp = 0; bp < 2; bp++) {
+                var bPlank = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.03, 0.08), woodMat);
+                bPlank.position.set(0, 0.42 + bp * 0.1, -0.12);
+                bPlank.rotation.x = 0.15;
+                bench.add(bPlank);
+            }
+            // Iron legs
+            for (var ls = -1; ls <= 1; ls += 2) {
+                var leg = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.3, 0.2), ironMat);
+                leg.position.set(ls * 0.25, 0.15, -0.02); bench.add(leg);
+                var armRest = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.18), ironMat);
+                armRest.position.set(ls * 0.28, 0.38, -0.04); bench.add(armRest);
+            }
+            bench.position.set(bpos.x, 0, bpos.z);
+            bench.rotation.y = Math.random() * Math.PI;
+            scene.add(bench);
+        }
+        // Lamp posts with warm lights
+        var lampCells = [{c:5, r:2}, {c:14, r:6}, {c:8, r:10}];
+        for (var li = 0; li < lampCells.length; li++) {
+            var lc = lampCells[li];
+            if (lc.r >= rows || lc.c >= cols || this.grid[lc.r][lc.c].type !== 'ground') continue;
+            var lpos = this.gridToWorld(lc.c, lc.r);
+            var lamp = new THREE.Group();
+            var poleMat = new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.7, roughness: 0.3 });
+            // Base
+            var lBase = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.08, 6), poleMat);
+            lBase.position.y = 0.04; lamp.add(lBase);
+            // Pole
+            var lPole = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.03, 2.0, 5), poleMat);
+            lPole.position.y = 1.04; lamp.add(lPole);
+            // Arm
+            var lArm = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.025, 0.025), poleMat);
+            lArm.position.set(0.15, 2.0, 0); lamp.add(lArm);
+            // Lamp housing
+            var housingMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.4 });
+            var housing = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.08, 6), housingMat);
+            housing.position.set(0.35, 1.97, 0); lamp.add(housing);
+            // Light bulb glow
+            var bulb = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 4),
+                new THREE.MeshBasicMaterial({ color: 0xffeeaa }));
+            bulb.position.set(0.35, 1.93, 0); lamp.add(bulb);
+            // Point light
+            var lampLight = new THREE.PointLight(0xffddaa, 0.4, 5, 2);
+            lampLight.position.set(0.35, 1.9, 0); lamp.add(lampLight);
+            lamp.position.set(lpos.x, 0, lpos.z);
+            scene.add(lamp);
+        }
+        // Security cameras on fence posts
+        var camCells = [{c:5, r:0}, {c:10, r:0}, {c:15, r:0}, {c:19, r:5}];
+        for (var ci = 0; ci < camCells.length; ci++) {
+            var cc = camCells[ci];
+            if (cc.r >= rows || cc.c >= cols) continue;
+            var cpos = this.gridToWorld(cc.c, cc.r);
+            var cam = new THREE.Group();
+            var camMat = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.4, metalness: 0.5 });
+            // Camera body
+            var camBody = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.15), camMat);
+            camBody.position.y = 2.3; cam.add(camBody);
+            // Lens
+            var lensMat = new THREE.MeshStandardMaterial({ color: 0x222244, roughness: 0.1, metalness: 0.8 });
+            var lens = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.03, 0.06, 6), lensMat);
+            lens.rotation.x = Math.PI / 2;
+            lens.position.set(0, 2.28, 0.1); cam.add(lens);
+            // LED indicator
+            var led = new THREE.Mesh(new THREE.SphereGeometry(0.01, 4, 3),
+                new THREE.MeshBasicMaterial({ color: 0xff0000 }));
+            led.position.set(0.04, 2.34, 0.06); cam.add(led);
+            // Mount bracket
+            var bracket = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.15, 0.04), camMat);
+            bracket.position.set(0, 2.2, -0.05); cam.add(bracket);
+            cam.position.set(cpos.x, 0, cpos.z);
+            cam.rotation.y = Math.PI * 0.5 + Math.random() * 0.5;
+            scene.add(cam);
+        }
+        // Trash cans near benches
+        var trashCells = [{c:9, r:4}, {c:13, r:6}];
+        for (var tri = 0; tri < trashCells.length; tri++) {
+            var trc = trashCells[tri];
+            if (trc.r >= rows || trc.c >= cols || this.grid[trc.r][trc.c].type !== 'ground') continue;
+            var trpos = this.gridToWorld(trc.c, trc.r);
+            var trash = new THREE.Group();
+            var trashMat = new THREE.MeshStandardMaterial({ color: 0x336633, roughness: 0.6 });
+            var can = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.35, 8), trashMat);
+            can.position.y = 0.175; can.castShadow = true; trash.add(can);
+            // Lid
+            var lid = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.1, 0.03, 8),
+                new THREE.MeshStandardMaterial({ color: 0x2a5a2a, roughness: 0.5 }));
+            lid.position.y = 0.36; trash.add(lid);
+            // Opening slot
+            var slot = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.01, 0.02),
+                new THREE.MeshBasicMaterial({ color: 0x111111 }));
+            slot.position.set(0, 0.37, 0.05); trash.add(slot);
+            trash.position.set(trpos.x + 0.4, 0, trpos.z);
+            scene.add(trash);
+        }
+        // Flagpole near visitor center
+        var flagPos = this.gridToWorld(11, 0);
+        if (this.grid[0] && this.grid[0][11] && this.grid[0][11].type === 'fence') {
+            var flagGroup = new THREE.Group();
+            var flagPoleMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.8, roughness: 0.2 });
+            var fp = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.03, 3.5, 5), flagPoleMat);
+            fp.position.y = 1.75; flagGroup.add(fp);
+            // Pole ball top
+            var fpBall = new THREE.Mesh(new THREE.SphereGeometry(0.04, 5, 4), flagPoleMat);
+            fpBall.position.y = 3.5; flagGroup.add(fpBall);
+            // Flag (simple plane)
+            var flagMat = new THREE.MeshStandardMaterial({ color: 0xcc3333, roughness: 0.7, side: THREE.DoubleSide });
+            var flag = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.3), flagMat);
+            flag.position.set(0.25, 3.3, 0); flagGroup.add(flag);
+            // Flag detail stripe
+            var stripeMat2 = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7, side: THREE.DoubleSide });
+            var fStripe = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.08), stripeMat2);
+            fStripe.position.set(0.25, 3.3, 0.001); flagGroup.add(fStripe);
+            flagGroup.position.set(flagPos.x, 0, flagPos.z);
+            scene.add(flagGroup);
+            this.animObjects.push({ type: 'flag', mesh: flag, seed: 7.3 });
+        }
+        // Picnic table
+        var picnicPos = this.gridToWorld(7, 10);
+        if (this.grid[10] && this.grid[10][7] && this.grid[10][7].type === 'ground') {
+            var picnic = new THREE.Group();
+            var pWood = new THREE.MeshStandardMaterial({ color: 0x8a6535, roughness: 0.85 });
+            // Table top
+            var pTop = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.04, 0.35), pWood);
+            pTop.position.y = 0.35; picnic.add(pTop);
+            // Table legs
+            for (var pl = -1; pl <= 1; pl += 2) {
+                var tLeg = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.35, 0.3), pWood);
+                tLeg.position.set(pl * 0.25, 0.175, 0); picnic.add(tLeg);
+            }
+            // Bench seats
+            for (var ps = -1; ps <= 1; ps += 2) {
+                var pSeat = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.03, 0.12), pWood);
+                pSeat.position.set(0, 0.22, ps * 0.28); picnic.add(pSeat);
+                var sLeg = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.22, 0.1), pWood);
+                sLeg.position.set(0, 0.11, ps * 0.28); picnic.add(sLeg);
+            }
+            picnic.position.set(picnicPos.x, 0, picnicPos.z);
+            picnic.rotation.y = 0.4;
+            scene.add(picnic);
+        }
+        // Dino footprints near exit (story: they escaped before!)
+        var fprintPos = this.gridToWorld(18, 9);
+        var fpMat = new THREE.MeshStandardMaterial({ color: 0x554433, roughness: 1 });
+        for (var fpi = 0; fpi < 4; fpi++) {
+            var fpGroup = new THREE.Group();
+            // Main pad
+            var pad = new THREE.Mesh(new THREE.CircleGeometry(0.06 + fpi * 0.01, 5), fpMat);
+            pad.rotation.x = -Math.PI / 2;
+            pad.position.y = 0.06;
+            fpGroup.add(pad);
+            // Three toes
+            for (var toe = -1; toe <= 1; toe++) {
+                var toeMesh = new THREE.Mesh(new THREE.CircleGeometry(0.025, 4), fpMat);
+                toeMesh.rotation.x = -Math.PI / 2;
+                toeMesh.position.set(toe * 0.04, 0.06, -0.06);
+                fpGroup.add(toeMesh);
+            }
+            fpGroup.position.set(
+                fprintPos.x + fpi * 0.6 + (Math.random()-0.5)*0.2,
+                0, fprintPos.z + (Math.random()-0.5)*0.3);
+            fpGroup.rotation.y = 0.1 + Math.random() * 0.2;
+            scene.add(fpGroup);
+        }
+        // Scattered bones near exit (dino leftovers)
+        var bonePos = this.gridToWorld(18, 10);
+        if (this.grid[10] && this.grid[10][18] && this.grid[10][18].type === 'ground') {
+            var boneMat = new THREE.MeshStandardMaterial({ color: 0xeeddcc, roughness: 0.7 });
+            for (var bn = 0; bn < 5; bn++) {
+                var boneLen = 0.08 + Math.random() * 0.1;
+                var bone = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.015, boneLen, 4), boneMat);
+                bone.position.set(
+                    bonePos.x + (Math.random()-0.5)*0.8,
+                    0.06,
+                    bonePos.z + (Math.random()-0.5)*0.6);
+                bone.rotation.z = Math.random() * Math.PI;
+                bone.rotation.x = (Math.random()-0.5) * 0.5;
+                scene.add(bone);
+                // Joint bulbs at bone ends
+                for (var end = -1; end <= 1; end += 2) {
+                    var bulb = new THREE.Mesh(new THREE.SphereGeometry(0.015, 4, 3), boneMat);
+                    bulb.position.set(
+                        bone.position.x + Math.cos(bone.rotation.z) * end * boneLen * 0.45,
+                        0.06,
+                        bone.position.z + Math.sin(bone.rotation.z) * end * boneLen * 0.2);
+                    scene.add(bulb);
+                }
+            }
+            // Skull
+            var skull = new THREE.Mesh(new THREE.SphereGeometry(0.04, 5, 4), boneMat);
+            skull.scale.set(1.2, 0.8, 1.0);
+            skull.position.set(bonePos.x - 0.1, 0.06, bonePos.z + 0.15);
+            scene.add(skull);
+            var eyeHole = new THREE.Mesh(new THREE.CircleGeometry(0.01, 4),
+                new THREE.MeshBasicMaterial({ color: 0x222211 }));
+            eyeHole.position.set(bonePos.x - 0.08, 0.07, bonePos.z + 0.19);
+            scene.add(eyeHole);
+        }
     },
 
     addJungleTree: function(scene, x, z) {
@@ -1265,6 +1566,20 @@ DE.Map = {
                     obj.rw.rotation.z = -wingAngle;
                     // Face direction of travel
                     obj.group.rotation.y = bTime * 0.7;
+                    break;
+                case 'flag':
+                    // Waving flag in wind
+                    obj.mesh.rotation.y = Math.sin(t * 2.5 + obj.seed) * 0.15;
+                    obj.mesh.rotation.z = Math.sin(t * 3.2 + obj.seed) * 0.05;
+                    obj.mesh.scale.x = 1.0 + Math.sin(t * 4 + obj.seed) * 0.05;
+                    break;
+                case 'dragonfly':
+                    // Darting hover pattern with sudden direction changes
+                    var dft = t * 1.5 + obj.seed;
+                    obj.group.position.x = obj.baseX + Math.sin(dft * 1.1) * 0.4 + Math.sin(dft * 3.7) * 0.15;
+                    obj.group.position.z = obj.baseZ + Math.cos(dft * 0.9) * 0.4 + Math.cos(dft * 2.9) * 0.15;
+                    obj.group.position.y = obj.baseY + Math.sin(dft * 2.1) * 0.1;
+                    obj.group.rotation.y = dft * 1.1 + Math.sin(dft * 3) * 0.5;
                     break;
             }
         }
