@@ -33,6 +33,16 @@ DE.DinoManager = {
         hpBarGroup.position.y = typeData.scale * 2.5 + 0.8;
         mesh.add(hpBarGroup);
 
+        // Ground shadow blob
+        var shadowSize = typeData.scale * 1.5;
+        var shadow = new THREE.Mesh(
+            new THREE.CircleGeometry(shadowSize, 8),
+            new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25, depthWrite: false })
+        );
+        shadow.rotation.x = -Math.PI / 2;
+        shadow.position.y = 0.02;
+        mesh.add(shadow);
+
         var dino = {
             type: typeData, typeName: typeName,
             hp: typeData.hp, maxHp: typeData.hp,
@@ -43,7 +53,8 @@ DE.DinoManager = {
             animPhase: Math.random() * Math.PI * 2,
             leftLeg: result.leftLeg, rightLeg: result.rightLeg,
             leftArm: result.leftArm, rightArm: result.rightArm,
-            tail: result.tail, jaw: result.jaw, bodyMesh: result.bodyMesh
+            tail: result.tail, jaw: result.jaw, bodyMesh: result.bodyMesh,
+            shadow: shadow
         };
 
         this.dinos.push(dino);
@@ -621,16 +632,21 @@ DE.DinoManager = {
                     btooth.position.set(t * s * 0.14, s * 0.17, s * 0.6);
                     jaw.add(btooth);
                 }
-                // Eyes - glowing red with slit pupils
+                // Eyes - glowing red with slit pupils and emissive glow
                 for (var side = -1; side <= 1; side += 2) {
                     var eyeSocket = new THREE.Mesh(new THREE.SphereGeometry(s * 0.14, 5, 4),
                         new THREE.MeshBasicMaterial({ color: 0x111111 }));
                     eyeSocket.position.set(side * s * 0.5, s * 3.7, s * 2.0);
                     group.add(eyeSocket);
                     var eyeIris = new THREE.Mesh(new THREE.SphereGeometry(s * 0.11, 5, 4),
-                        new THREE.MeshBasicMaterial({ color: 0xff2200 }));
+                        new THREE.MeshStandardMaterial({ color: 0xff2200, emissive: 0xff2200, emissiveIntensity: 0.8 }));
                     eyeIris.position.set(side * s * 0.52, s * 3.7, s * 2.04);
                     group.add(eyeIris);
+                    // Eye glow halo
+                    var eyeGlow = new THREE.Mesh(new THREE.SphereGeometry(s * 0.16, 5, 4),
+                        new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.2 }));
+                    eyeGlow.position.set(side * s * 0.52, s * 3.7, s * 2.03);
+                    group.add(eyeGlow);
                     var pupil = new THREE.Mesh(new THREE.SphereGeometry(s * 0.06, 3, 3),
                         new THREE.MeshBasicMaterial({ color: 0x000000 }));
                     pupil.position.set(side * s * 0.54, s * 3.7, s * 2.08);

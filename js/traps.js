@@ -470,37 +470,119 @@ DE.TrapManager = {
     },
 
     showEffect: function(trap, target, scene) {
-        // Line from trap to target
-        var mat = new THREE.LineBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.8 });
+        var type = trap.type;
+        // Projectile trail from trap to target
+        var trailColor = type.id === 'tranq_dart' ? 0x44ddff : type.id === 'snare_cannon' ? 0xffaa44 : 0xffff00;
+        var mat = new THREE.LineBasicMaterial({ color: trailColor, transparent: true, opacity: 0.9, linewidth: 2 });
+        var mid = new THREE.Vector3(
+            (trap.x + target.x) * 0.5,
+            1.2 + Math.random() * 0.3,
+            (trap.z + target.z) * 0.5
+        );
         var geo = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(trap.x, 0.5, trap.z),
+            new THREE.Vector3(trap.x, 0.6, trap.z), mid,
             new THREE.Vector3(target.x, 0.5, target.z)
         ]);
         var line = new THREE.Line(geo, mat);
         scene.add(line);
-        setTimeout(function() { scene.remove(line); }, 200);
+        // Impact flash at target
+        var flash = new THREE.Mesh(
+            new THREE.SphereGeometry(0.2, 6, 4),
+            new THREE.MeshBasicMaterial({ color: trailColor, transparent: true, opacity: 0.6 })
+        );
+        flash.position.set(target.x, 0.5, target.z);
+        scene.add(flash);
+        // Impact particles
+        var particleGroup = new THREE.Group();
+        for (var p = 0; p < 4; p++) {
+            var particle = new THREE.Mesh(
+                new THREE.SphereGeometry(0.04, 3, 3),
+                new THREE.MeshBasicMaterial({ color: trailColor, transparent: true, opacity: 0.8 })
+            );
+            particle.position.set(
+                target.x + (Math.random() - 0.5) * 0.4,
+                0.3 + Math.random() * 0.5,
+                target.z + (Math.random() - 0.5) * 0.4
+            );
+            particleGroup.add(particle);
+        }
+        scene.add(particleGroup);
+        setTimeout(function() { scene.remove(line); scene.remove(flash); scene.remove(particleGroup); }, 200);
     },
 
     showAreaEffect: function(trap, scene) {
+        // Expanding shockwave ring
         var ring = new THREE.Mesh(
-            new THREE.RingGeometry(0.1, trap.type.range, 16),
-            new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.4, side: THREE.DoubleSide })
+            new THREE.RingGeometry(0.1, trap.type.range, 20),
+            new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.5, side: THREE.DoubleSide })
         );
         ring.rotation.x = -Math.PI / 2;
         ring.position.set(trap.x, 0.3, trap.z);
         scene.add(ring);
-        setTimeout(function() { scene.remove(ring); }, 300);
+        // Ground scorch
+        var scorch = new THREE.Mesh(
+            new THREE.CircleGeometry(trap.type.range * 0.6, 10),
+            new THREE.MeshBasicMaterial({ color: 0x332200, transparent: true, opacity: 0.3, depthWrite: false })
+        );
+        scorch.rotation.x = -Math.PI / 2;
+        scorch.position.set(trap.x, 0.05, trap.z);
+        scene.add(scorch);
+        // Burst particles
+        var burstGroup = new THREE.Group();
+        for (var bp = 0; bp < 8; bp++) {
+            var angle = (bp / 8) * Math.PI * 2;
+            var spark = new THREE.Mesh(
+                new THREE.SphereGeometry(0.06, 4, 3),
+                new THREE.MeshBasicMaterial({ color: 0xffdd00, transparent: true, opacity: 0.7 })
+            );
+            spark.position.set(
+                trap.x + Math.cos(angle) * trap.type.range * 0.5,
+                0.4 + Math.random() * 0.4,
+                trap.z + Math.sin(angle) * trap.type.range * 0.5
+            );
+            burstGroup.add(spark);
+        }
+        scene.add(burstGroup);
+        setTimeout(function() { scene.remove(ring); scene.remove(burstGroup); }, 300);
+        setTimeout(function() { scene.remove(scorch); }, 1500);
     },
 
     showChainEffect: function(from, to, scene) {
-        var mat = new THREE.LineBasicMaterial({ color: 0x44ddff, transparent: true, opacity: 0.9 });
-        var geo = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(from.x, 0.5, from.z),
-            new THREE.Vector3(to.x, 0.5, to.z)
-        ]);
+        // Zigzag lightning bolt between targets
+        var points = [];
+        var segments = 5;
+        for (var i = 0; i <= segments; i++) {
+            var t = i / segments;
+            var px = from.x + (to.x - from.x) * t + (i > 0 && i < segments ? (Math.random() - 0.5) * 0.3 : 0);
+            var py = 0.5 + Math.sin(t * Math.PI) * 0.3 + (i > 0 && i < segments ? (Math.random() - 0.5) * 0.2 : 0);
+            var pz = from.z + (to.z - from.z) * t + (i > 0 && i < segments ? (Math.random() - 0.5) * 0.3 : 0);
+            points.push(new THREE.Vector3(px, py, pz));
+        }
+        var mat = new THREE.LineBasicMaterial({ color: 0x88eeff, transparent: true, opacity: 0.9 });
+        var geo = new THREE.BufferGeometry().setFromPoints(points);
         var line = new THREE.Line(geo, mat);
         scene.add(line);
-        setTimeout(function() { scene.remove(line); }, 250);
+        // Secondary thinner bolt
+        var points2 = [];
+        for (var i = 0; i <= segments; i++) {
+            var t = i / segments;
+            points2.push(new THREE.Vector3(
+                from.x + (to.x - from.x) * t + (i > 0 && i < segments ? (Math.random() - 0.5) * 0.2 : 0),
+                0.6 + (i > 0 && i < segments ? (Math.random() - 0.5) * 0.15 : 0),
+                from.z + (to.z - from.z) * t + (i > 0 && i < segments ? (Math.random() - 0.5) * 0.2 : 0)
+            ));
+        }
+        var line2 = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points2),
+            new THREE.LineBasicMaterial({ color: 0xccffff, transparent: true, opacity: 0.5 }));
+        scene.add(line2);
+        // Glow at impact point
+        var impactGlow = new THREE.Mesh(
+            new THREE.SphereGeometry(0.15, 5, 4),
+            new THREE.MeshBasicMaterial({ color: 0x44ddff, transparent: true, opacity: 0.5 })
+        );
+        impactGlow.position.set(to.x, 0.5, to.z);
+        scene.add(impactGlow);
+        setTimeout(function() { scene.remove(line); scene.remove(line2); scene.remove(impactGlow); }, 250);
     },
 
     clear: function() {

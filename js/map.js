@@ -65,6 +65,16 @@ DE.Map = {
                     road.position.set(pos.x, 0.04, pos.z);
                     road.receiveShadow = true;
                     scene.add(road);
+                    // Glow underlay for spawn/exit cells
+                    if (cell.type === 'spawn') {
+                        var spGlow = new THREE.Mesh(new THREE.BoxGeometry(cs * 0.9, 0.02, cs * 0.9),
+                            new THREE.MeshBasicMaterial({ color: 0xff2200, transparent: true, opacity: 0.15 }));
+                        spGlow.position.set(pos.x, 0.09, pos.z); scene.add(spGlow);
+                    } else if (cell.type === 'exit') {
+                        var exGlow = new THREE.Mesh(new THREE.BoxGeometry(cs * 0.9, 0.02, cs * 0.9),
+                            new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.15 }));
+                        exGlow.position.set(pos.x, 0.09, pos.z); scene.add(exGlow);
+                    }
                     // Cobblestone edge borders
                     if (cell.type === 'path') {
                         var edgeMat = new THREE.MeshStandardMaterial({ color: 0x665544, roughness: 0.8 });
@@ -152,10 +162,13 @@ DE.Map = {
             for (var c = 1; c < cols - 1; c++) {
                 if (this.grid[r][c].type !== 'ground') continue;
                 var pos = this.gridToWorld(c, r), rand = Math.random();
-                if (rand < 0.10) this.addPalmTree(scene, pos.x, pos.z);
+                if (rand < 0.07) this.addPalmTree(scene, pos.x, pos.z);
+                else if (rand < 0.11) this.addJungleTree(scene, pos.x, pos.z);
                 else if (rand < 0.15) this.addFern(scene, pos.x, pos.z);
                 else if (rand < 0.22) this.addBush(scene, pos.x, pos.z);
                 else if (rand < 0.26) this.addRock(scene, pos.x, pos.z);
+                else if (rand < 0.28) this.addMushrooms(scene, pos.x, pos.z);
+                else if (rand < 0.30) this.addFallenLog(scene, pos.x, pos.z);
             }
         }
         this.addVisitorCenter(scene, cs);
@@ -165,6 +178,7 @@ DE.Map = {
         this.addExitGate(scene, cs);
         this.addPaddockSigns(scene, cs);
         this.addAmbientProps(scene, cs);
+        this.addFogBorder(scene, cs, cols, rows);
     },
 
     addElectricFence: function(scene, x, z, cs, c, r, cols, rows) {
@@ -906,6 +920,204 @@ DE.Map = {
             flameInner.position.y = 1.33; tg.add(flameInner);
             tg.position.set(tpos.x, 0, tpos.z);
             scene.add(tg);
+        }
+    },
+
+    addJungleTree: function(scene, x, z) {
+        var g = new THREE.Group();
+        var ox = x + (Math.random() - 0.5) * 0.5;
+        var oz = z + (Math.random() - 0.5) * 0.5;
+        var trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3018, roughness: 0.95 });
+        var barkMat = new THREE.MeshStandardMaterial({ color: 0x3d2810, roughness: 1.0 });
+        // Thick trunk with slight lean
+        var lean = (Math.random() - 0.5) * 0.15;
+        for (var i = 0; i < 4; i++) {
+            var radius = 0.18 - i * 0.03;
+            var seg = new THREE.Mesh(new THREE.CylinderGeometry(radius - 0.02, radius, 0.7, 7), trunkMat);
+            seg.position.y = 0.35 + i * 0.65;
+            seg.position.x = lean * i;
+            seg.castShadow = true; g.add(seg);
+            // Bark texture bumps
+            if (i < 3) {
+                for (var bb = 0; bb < 3; bb++) {
+                    var bark = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.15, 0.04), barkMat);
+                    var bAngle = bb * 2.1 + i;
+                    bark.position.set(Math.sin(bAngle) * radius, 0.35 + i * 0.65, Math.cos(bAngle) * radius);
+                    bark.rotation.y = bAngle;
+                    g.add(bark);
+                }
+            }
+        }
+        // Buttress roots
+        var rootMat = new THREE.MeshStandardMaterial({ color: 0x4a3520, roughness: 1 });
+        for (var rt = 0; rt < 4; rt++) {
+            var rootAngle = (rt / 4) * Math.PI * 2 + Math.random() * 0.5;
+            var root = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.3, 0.35), rootMat);
+            root.position.set(Math.sin(rootAngle) * 0.15, 0.15, Math.cos(rootAngle) * 0.15);
+            root.rotation.y = rootAngle;
+            root.rotation.x = 0.4;
+            g.add(root);
+        }
+        // Dense canopy - multiple layered spheres
+        var leafColors = [0x1a6b18, 0x228822, 0x1f7520, 0x2a8a25, 0x166615];
+        for (var c = 0; c < 7; c++) {
+            var leafMat = new THREE.MeshStandardMaterial({
+                color: leafColors[c % leafColors.length], roughness: 0.8 });
+            var canopy = new THREE.Mesh(new THREE.SphereGeometry(0.5 + Math.random() * 0.4, 7, 5), leafMat);
+            canopy.position.set(
+                lean * 3.5 + (Math.random() - 0.5) * 0.8,
+                2.8 + Math.random() * 0.7,
+                (Math.random() - 0.5) * 0.8
+            );
+            canopy.scale.y = 0.6 + Math.random() * 0.3;
+            canopy.castShadow = true;
+            g.add(canopy);
+        }
+        // Hanging vines
+        var vineMat = new THREE.MeshStandardMaterial({ color: 0x2d6b20, roughness: 0.9 });
+        for (var v = 0; v < 3; v++) {
+            var vineLen = 0.6 + Math.random() * 0.8;
+            var vine = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.005, vineLen, 3), vineMat);
+            vine.position.set(
+                lean * 3 + (Math.random() - 0.5) * 0.7,
+                2.5 - vineLen * 0.3,
+                (Math.random() - 0.5) * 0.6
+            );
+            vine.rotation.z = (Math.random() - 0.5) * 0.3;
+            g.add(vine);
+        }
+        // Epiphyte (small plant growing on trunk)
+        if (Math.random() < 0.5) {
+            var epiMat = new THREE.MeshStandardMaterial({ color: 0x3a9930, roughness: 0.7 });
+            var epi = new THREE.Mesh(new THREE.SphereGeometry(0.08, 4, 3), epiMat);
+            epi.position.set(0.15, 1.5 + Math.random(), 0.1);
+            g.add(epi);
+        }
+        g.position.set(ox, 0, oz);
+        scene.add(g);
+    },
+
+    addMushrooms: function(scene, x, z) {
+        var g = new THREE.Group();
+        var count = 2 + Math.floor(Math.random() * 4);
+        var mushroomColors = [0xee4422, 0xffaa33, 0xcc8844, 0xeeddaa, 0x8866aa];
+        for (var i = 0; i < count; i++) {
+            var mg = new THREE.Group();
+            var color = mushroomColors[Math.floor(Math.random() * mushroomColors.length)];
+            var scale = 0.4 + Math.random() * 0.6;
+            // Stem
+            var stemMat = new THREE.MeshStandardMaterial({ color: 0xeeddcc, roughness: 0.7 });
+            var stem = new THREE.Mesh(new THREE.CylinderGeometry(0.015 * scale, 0.02 * scale, 0.12 * scale, 5), stemMat);
+            stem.position.y = 0.06 * scale;
+            mg.add(stem);
+            // Cap
+            var capMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.5 });
+            var cap = new THREE.Mesh(new THREE.SphereGeometry(0.04 * scale, 6, 4), capMat);
+            cap.scale.y = 0.5;
+            cap.position.y = 0.12 * scale;
+            mg.add(cap);
+            // Cap underside (gills)
+            var gillMat = new THREE.MeshStandardMaterial({ color: 0xddccaa, roughness: 0.8 });
+            var gill = new THREE.Mesh(new THREE.CylinderGeometry(0.035 * scale, 0.01 * scale, 0.02 * scale, 6), gillMat);
+            gill.position.y = 0.09 * scale;
+            mg.add(gill);
+            // Spots on red mushrooms
+            if (color === 0xee4422 && Math.random() < 0.7) {
+                for (var sp = 0; sp < 3; sp++) {
+                    var spot = new THREE.Mesh(new THREE.CircleGeometry(0.008 * scale, 4),
+                        new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
+                    var spAngle = sp * 2.1;
+                    spot.position.set(Math.sin(spAngle) * 0.025 * scale, 0.13 * scale, Math.cos(spAngle) * 0.025 * scale);
+                    spot.rotation.x = -0.3;
+                    spot.rotation.y = spAngle;
+                    mg.add(spot);
+                }
+            }
+            mg.position.set((Math.random() - 0.5) * 0.6, 0, (Math.random() - 0.5) * 0.6);
+            g.add(mg);
+        }
+        g.position.set(x, 0, z);
+        scene.add(g);
+    },
+
+    addFallenLog: function(scene, x, z) {
+        var g = new THREE.Group();
+        var logLen = 0.8 + Math.random() * 0.8;
+        var logRad = 0.06 + Math.random() * 0.05;
+        var logMat = new THREE.MeshStandardMaterial({ color: 0x5a3a20, roughness: 0.95 });
+        var log = new THREE.Mesh(new THREE.CylinderGeometry(logRad, logRad * 1.1, logLen, 7), logMat);
+        log.rotation.z = Math.PI / 2;
+        log.rotation.y = Math.random() * Math.PI;
+        log.position.y = logRad;
+        log.castShadow = true;
+        g.add(log);
+        // Bark rings at ends
+        var endMat = new THREE.MeshStandardMaterial({ color: 0x3a2510, roughness: 1 });
+        for (var side = -1; side <= 1; side += 2) {
+            var endCap = new THREE.Mesh(new THREE.CircleGeometry(logRad * 0.9, 6), endMat);
+            endCap.position.set(side * logLen * 0.5, 0, 0);
+            endCap.rotation.y = side * Math.PI / 2;
+            g.add(endCap);
+        }
+        // Moss growing on log
+        var mossMat = new THREE.MeshStandardMaterial({ color: 0x3a7a25, roughness: 1.0 });
+        for (var m = 0; m < 3; m++) {
+            var moss = new THREE.Mesh(new THREE.SphereGeometry(0.03 + Math.random() * 0.03, 4, 3), mossMat);
+            moss.scale.y = 0.4;
+            moss.position.set((Math.random() - 0.5) * logLen * 0.6, logRad + 0.01, (Math.random() - 0.5) * 0.08);
+            g.add(moss);
+        }
+        // Small mushrooms on log
+        if (Math.random() < 0.6) {
+            var shelfMat = new THREE.MeshStandardMaterial({ color: 0xcc8844, roughness: 0.6 });
+            for (var sh = 0; sh < 2; sh++) {
+                var shelf = new THREE.Mesh(new THREE.SphereGeometry(0.025, 4, 3), shelfMat);
+                shelf.scale.set(1.2, 0.4, 1);
+                shelf.position.set((Math.random() - 0.5) * logLen * 0.4, logRad * 0.7, logRad * 0.8);
+                g.add(shelf);
+            }
+        }
+        g.position.set(x + (Math.random() - 0.5) * 0.4, 0, z + (Math.random() - 0.5) * 0.4);
+        g.rotation.y = Math.random() * Math.PI;
+        scene.add(g);
+    },
+
+    addFogBorder: function(scene, cs, cols, rows) {
+        // Soft fog planes at map edges for depth/atmosphere
+        var fogMat = new THREE.MeshBasicMaterial({
+            color: 0xaaccdd, transparent: true, opacity: 0.15, side: THREE.DoubleSide, depthWrite: false
+        });
+        var gridW = cols * cs, gridH = rows * cs;
+        // Back edge fog
+        var fogBack = new THREE.Mesh(new THREE.PlaneGeometry(gridW + 10, 4), fogMat);
+        fogBack.position.set(gridW / 2, 2, -3);
+        scene.add(fogBack);
+        // Front edge fog (lighter)
+        var fogFront = new THREE.Mesh(new THREE.PlaneGeometry(gridW + 10, 3),
+            new THREE.MeshBasicMaterial({ color: 0xbbddcc, transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false }));
+        fogFront.position.set(gridW / 2, 1.5, gridH + 3);
+        scene.add(fogFront);
+        // Side fog wisps (vertical planes along edges)
+        for (var side = -1; side <= 1; side += 2) {
+            var sideFog = new THREE.Mesh(new THREE.PlaneGeometry(3, gridH + 6),
+                new THREE.MeshBasicMaterial({ color: 0x99bbcc, transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false }));
+            sideFog.rotation.y = Math.PI / 2;
+            sideFog.position.set(side > 0 ? gridW + 2 : -2, 1.5, gridH / 2);
+            scene.add(sideFog);
+        }
+        // Ground mist patches near water and low areas
+        var mistMat = new THREE.MeshBasicMaterial({
+            color: 0xddeeff, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false
+        });
+        for (var mi = 0; mi < 8; mi++) {
+            var mist = new THREE.Mesh(new THREE.CircleGeometry(1.5 + Math.random() * 2, 8), mistMat);
+            mist.rotation.x = -Math.PI / 2;
+            mist.position.set(
+                Math.random() * gridW,
+                0.1,
+                Math.random() * gridH
+            );
+            scene.add(mist);
         }
     },
 
