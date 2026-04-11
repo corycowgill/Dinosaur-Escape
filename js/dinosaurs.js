@@ -37,7 +37,7 @@ DE.DinoManager = {
             hp: typeData.hp, maxHp: typeData.hp,
             speed: typeData.speed, currentSpeed: typeData.speed,
             waypointIndex: 0, x: startPos.x, z: startPos.z,
-            mesh: mesh, hpFill: hpFill, alive: true,
+            mesh: mesh, hpFill: hpFill, hpBar: hpBarGroup, alive: true,
             stunTimer: 0, dotTimer: 0, dotDamage: 0, dotTickTimer: 0,
             animPhase: Math.random() * Math.PI * 2,
             leftLeg: result.leftLeg, rightLeg: result.rightLeg,
@@ -757,6 +757,10 @@ DE.DinoManager = {
             dino.hpFill.scale.x = Math.max(0.01, hpRatio);
             dino.hpFill.position.x = -(0.96 * (1 - hpRatio)) / 2;
             dino.hpFill.material.color.setHex(hpRatio > 0.5 ? 0x44ff44 : hpRatio > 0.25 ? 0xffaa00 : 0xff3333);
+            // Billboard health bar to always face camera
+            if (dino.hpBar && DE.Renderer && DE.Renderer.camera) {
+                dino.hpBar.quaternion.copy(DE.Renderer.camera.quaternion);
+            }
         }
     },
 
