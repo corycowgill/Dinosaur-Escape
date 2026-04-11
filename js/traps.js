@@ -385,7 +385,33 @@ DE.TrapManager = {
             }
 
             trap.cooldownTimer = Math.max(0, trap.cooldownTimer - dt);
-            if (trap.cooldownTimer > 0) continue;
+            // Cooldown visual: dim trap while recharging
+            if (trap.cooldownTimer > 0) {
+                var coolProg = trap.cooldownTimer / (trap.type.cooldown || 1);
+                var dimness = 0.4 + (1.0 - coolProg) * 0.6;
+                if (!trap._originalY) trap._originalY = trap.mesh.position.y;
+                trap.mesh.position.y = trap._originalY - coolProg * 0.03;
+                trap.mesh.traverse(function(child) {
+                    if (child.material && child.material.color && !child.material._origColorSet) {
+                        child.material._origColor = child.material.color.getHex();
+                        child.material._origColorSet = true;
+                    }
+                    if (child.material && child.material._origColorSet) {
+                        var orig = new THREE.Color(child.material._origColor);
+                        child.material.color.copy(orig).multiplyScalar(dimness);
+                    }
+                });
+                continue;
+            }
+            // Restore full brightness when ready
+            if (trap._originalY) {
+                trap.mesh.position.y = trap._originalY;
+                trap.mesh.traverse(function(child) {
+                    if (child.material && child.material._origColorSet) {
+                        child.material.color.setHex(child.material._origColor);
+                    }
+                });
+            }
 
             var type = trap.type;
             var hitSomething = false;
@@ -538,6 +564,30 @@ DE.TrapManager = {
         ]);
         var line = new THREE.Line(geo, mat);
         scene.add(line);
+
+        // Muzzle flash at trap origin
+        var muzzleFlash = new THREE.Mesh(
+            new THREE.SphereGeometry(0.15, 6, 4),
+            new THREE.MeshBasicMaterial({ color: 0xffffaa, transparent: true, opacity: 0.9 })
+        );
+        muzzleFlash.position.set(trap.x, 0.7, trap.z);
+        scene.add(muzzleFlash);
+        // Muzzle flash ring
+        var muzzleRing = new THREE.Mesh(
+            new THREE.RingGeometry(0.05, 0.2, 8),
+            new THREE.MeshBasicMaterial({ color: trailColor, transparent: true, opacity: 0.6, side: THREE.DoubleSide })
+        );
+        muzzleRing.rotation.x = -Math.PI / 2;
+        muzzleRing.position.set(trap.x, 0.8, trap.z);
+        scene.add(muzzleRing);
+        // Smoke puff at muzzle
+        var muzzleSmoke = new THREE.Mesh(
+            new THREE.SphereGeometry(0.1, 5, 4),
+            new THREE.MeshBasicMaterial({ color: 0xcccccc, transparent: true, opacity: 0.3 })
+        );
+        muzzleSmoke.position.set(trap.x, 0.8, trap.z);
+        scene.add(muzzleSmoke);
+
         // Impact flash at target
         var flash = new THREE.Mesh(
             new THREE.SphereGeometry(0.2, 6, 4),
@@ -545,22 +595,34 @@ DE.TrapManager = {
         );
         flash.position.set(target.x, 0.5, target.z);
         scene.add(flash);
+        // Impact ring on ground
+        var impactRing = new THREE.Mesh(
+            new THREE.RingGeometry(0.05, 0.25, 8),
+            new THREE.MeshBasicMaterial({ color: trailColor, transparent: true, opacity: 0.4, side: THREE.DoubleSide })
+        );
+        impactRing.rotation.x = -Math.PI / 2;
+        impactRing.position.set(target.x, 0.08, target.z);
+        scene.add(impactRing);
         // Impact particles
         var particleGroup = new THREE.Group();
-        for (var p = 0; p < 4; p++) {
+        for (var p = 0; p < 6; p++) {
             var particle = new THREE.Mesh(
-                new THREE.SphereGeometry(0.04, 3, 3),
+                new THREE.SphereGeometry(0.03 + Math.random() * 0.03, 3, 3),
                 new THREE.MeshBasicMaterial({ color: trailColor, transparent: true, opacity: 0.8 })
             );
             particle.position.set(
-                target.x + (Math.random() - 0.5) * 0.4,
-                0.3 + Math.random() * 0.5,
-                target.z + (Math.random() - 0.5) * 0.4
+                target.x + (Math.random() - 0.5) * 0.5,
+                0.2 + Math.random() * 0.6,
+                target.z + (Math.random() - 0.5) * 0.5
             );
             particleGroup.add(particle);
         }
         scene.add(particleGroup);
-        setTimeout(function() { scene.remove(line); scene.remove(flash); scene.remove(particleGroup); }, 200);
+        setTimeout(function() {
+            scene.remove(line); scene.remove(flash); scene.remove(particleGroup);
+            scene.remove(muzzleFlash); scene.remove(muzzleRing); scene.remove(impactRing);
+        }, 200);
+        setTimeout(function() { scene.remove(muzzleSmoke); }, 500);
     },
 
     showAreaEffect: function(trap, scene) {

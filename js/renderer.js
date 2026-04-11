@@ -3,6 +3,7 @@ window.DE = window.DE || {};
 DE.Renderer = {
     scene: null, camera: null, renderer: null, clock: null, groundPlane: null,
     zoomLevel: 1.0, minZoom: 0.4, maxZoom: 2.5, baseViewSize: 0,
+    clouds: [], lightShafts: [],
 
     init: function(canvas) {
         this.clock = new THREE.Clock();
@@ -29,24 +30,25 @@ DE.Renderer = {
         this.scene.add(skyMesh);
         this.scene.background = null; // Use sky sphere
 
-        // Volumetric clouds
+        // Volumetric clouds (animated drift)
+        this.clouds = [];
         var cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 });
-        for (var ci = 0; ci < 12; ci++) {
+        var cloudMat2 = new THREE.MeshBasicMaterial({ color: 0xeeeeff, transparent: true, opacity: 0.25 });
+        for (var ci = 0; ci < 16; ci++) {
             var cloud = new THREE.Group();
-            var puffs = 3 + Math.floor(Math.random() * 4);
+            var puffs = 3 + Math.floor(Math.random() * 5);
             for (var p = 0; p < puffs; p++) {
                 var puff = new THREE.Mesh(
-                    new THREE.SphereGeometry(1.5 + Math.random() * 2.5, 6, 5), cloudMat);
-                puff.scale.y = 0.35 + Math.random() * 0.2;
-                puff.position.set((Math.random() - 0.5) * 5, (Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 3);
+                    new THREE.SphereGeometry(1.5 + Math.random() * 2.5, 6, 5),
+                    p === 0 ? cloudMat : (Math.random() < 0.5 ? cloudMat : cloudMat2));
+                puff.scale.y = 0.3 + Math.random() * 0.2;
+                puff.position.set((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 4);
                 cloud.add(puff);
             }
-            cloud.position.set(
-                (Math.random() - 0.5) * 120,
-                30 + Math.random() * 15,
-                (Math.random() - 0.5) * 80
-            );
+            var cx = (Math.random() - 0.5) * 140;
+            cloud.position.set(cx, 28 + Math.random() * 18, (Math.random() - 0.5) * 90);
             this.scene.add(cloud);
+            this.clouds.push({ group: cloud, speed: 0.3 + Math.random() * 0.5, baseX: cx });
         }
 
         var aspect = window.innerWidth / window.innerHeight;
@@ -105,6 +107,26 @@ DE.Renderer = {
         rim.position.set(-10, 25, -20);
         this.scene.add(rim);
 
+        // Volumetric light shafts (god rays from sun direction)
+        this.lightShafts = [];
+        var shaftMat = new THREE.MeshBasicMaterial({
+            color: 0xfff8dd, transparent: true, opacity: 0.04, side: THREE.DoubleSide, depthWrite: false
+        });
+        for (var si = 0; si < 5; si++) {
+            var shaftW = 1.5 + Math.random() * 2.5;
+            var shaftH = 12 + Math.random() * 8;
+            var shaft = new THREE.Mesh(new THREE.PlaneGeometry(shaftW, shaftH), shaftMat.clone());
+            shaft.position.set(
+                centerX - 8 + si * 5 + (Math.random() - 0.5) * 4,
+                shaftH * 0.4,
+                centerZ - 3 + (Math.random() - 0.5) * 10
+            );
+            shaft.rotation.y = 0.3 + Math.random() * 0.4;
+            shaft.rotation.z = -0.15 + Math.random() * 0.1;
+            this.scene.add(shaft);
+            this.lightShafts.push({ mesh: shaft, baseOpacity: 0.03 + Math.random() * 0.03, seed: si * 2.7 });
+        }
+
         // Ambient dust/pollen particles
         this.dustParticles = this.createDustParticles(centerX, centerZ);
         this.scene.add(this.dustParticles);
@@ -154,10 +176,11 @@ DE.Renderer = {
     },
 
     render: function() {
+        var time = this.clock.elapsedTime;
+
         // Animate dust particles
         if (this.dustParticles) {
             var pos = this.dustParticles.geometry.attributes.position;
-            var time = this.clock.elapsedTime;
             for (var i = 0; i < pos.count; i++) {
                 pos.array[i * 3] += Math.sin(time * 0.3 + i * 0.7) * 0.003;
                 pos.array[i * 3 + 1] += Math.sin(time * 0.5 + i * 1.3) * 0.002;
@@ -168,6 +191,23 @@ DE.Renderer = {
             }
             pos.needsUpdate = true;
         }
+
+        // Drift clouds across the sky
+        for (var ci = 0; ci < this.clouds.length; ci++) {
+            var cd = this.clouds[ci];
+            cd.group.position.x = cd.baseX + time * cd.speed;
+            // Wrap clouds that drift too far
+            if (cd.group.position.x > 80) { cd.baseX -= 160; }
+        }
+
+        // Animate light shafts (subtle shimmer)
+        for (var si = 0; si < this.lightShafts.length; si++) {
+            var ls = this.lightShafts[si];
+            var shimmer = Math.sin(time * 0.5 + ls.seed) * 0.5 + 0.5;
+            ls.mesh.material.opacity = ls.baseOpacity * (0.4 + shimmer * 0.6);
+            ls.mesh.rotation.y += Math.sin(time * 0.2 + ls.seed) * 0.0003;
+        }
+
         this.renderer.render(this.scene, this.camera);
     },
 

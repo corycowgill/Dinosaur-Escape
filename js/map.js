@@ -182,7 +182,7 @@ DE.Map = {
                     gnd.position.set(pos.x, 0.025, pos.z);
                     gnd.receiveShadow = true;
                     scene.add(gnd);
-                    // Grass tufts - crossed planes for 3D look
+                    // Grass tufts - crossed planes for 3D look (animated sway)
                     if (Math.random() < 0.6) {
                         var tuftCount = 2 + Math.floor(Math.random() * 3);
                         var grassColors = [0x2d8c1a, 0x34951f, 0x267a15, 0x3a9e28, 0x1f6612];
@@ -202,6 +202,10 @@ DE.Map = {
                             tuft2.position.set(tuftX, tuftH * 0.45 + 0.05, tuftZ);
                             tuft2.rotation.y = tuft1.rotation.y + Math.PI * 0.5;
                             scene.add(tuft2);
+                            // Store every 3rd grass tuft for wind sway animation
+                            if (t === 0 && Math.random() < 0.4) {
+                                this.animObjects.push({ type: 'grass', mesh: tuft1, mesh2: tuft2, seed: c * 1.3 + r * 2.7 + t });
+                            }
                         }
                     }
                     // Clover/wildflower patches
@@ -1068,10 +1072,20 @@ DE.Map = {
             var torchLight = new THREE.PointLight(0xff6622, 0.6, 4, 2);
             torchLight.position.y = 1.35;
             tg.add(torchLight);
+            // Smoke wisps rising from torch
+            var smokeMat = new THREE.MeshBasicMaterial({ color: 0x888888, transparent: true, opacity: 0.15, depthWrite: false });
+            var smokeParticles = [];
+            for (var sm = 0; sm < 3; sm++) {
+                var smoke = new THREE.Mesh(new THREE.SphereGeometry(0.02 + Math.random() * 0.02, 4, 3), smokeMat.clone());
+                smoke.position.set(0, 1.4 + sm * 0.15, 0);
+                tg.add(smoke);
+                smokeParticles.push(smoke);
+            }
             tg.position.set(tpos.x, 0, tpos.z);
             scene.add(tg);
             // Store for animation
             this.animObjects.push({ type: 'flame', flame: flame, flameInner: flameInner, glow: flameGlow, light: torchLight, seed: ti * 1.7 });
+            this.animObjects.push({ type: 'smoke', particles: smokeParticles, seed: ti * 3.1 });
         }
         // Park benches
         var benchCells = [{c:8, r:4}, {c:12, r:6}, {c:6, r:8}];
@@ -1580,6 +1594,30 @@ DE.Map = {
                     obj.group.position.z = obj.baseZ + Math.cos(dft * 0.9) * 0.4 + Math.cos(dft * 2.9) * 0.15;
                     obj.group.position.y = obj.baseY + Math.sin(dft * 2.1) * 0.1;
                     obj.group.rotation.y = dft * 1.1 + Math.sin(dft * 3) * 0.5;
+                    break;
+                case 'grass':
+                    // Wind sway - gentle oscillation at the top, anchored at base
+                    var windStr = Math.sin(t * 1.8 + obj.seed) * 0.08 + Math.sin(t * 3.1 + obj.seed * 2.3) * 0.04;
+                    var gustStr = Math.sin(t * 0.4 + obj.seed * 0.5) > 0.7 ? Math.sin(t * 6 + obj.seed) * 0.06 : 0;
+                    obj.mesh.rotation.z = windStr + gustStr;
+                    obj.mesh.rotation.x = Math.sin(t * 2.3 + obj.seed * 1.5) * 0.03;
+                    if (obj.mesh2) {
+                        obj.mesh2.rotation.z = windStr * 0.7 + gustStr * 0.5;
+                        obj.mesh2.rotation.x = Math.sin(t * 2.0 + obj.seed * 1.8) * 0.025;
+                    }
+                    break;
+                case 'smoke':
+                    // Rising smoke wisps that fade and reset
+                    for (var sp = 0; sp < obj.particles.length; sp++) {
+                        var smoke = obj.particles[sp];
+                        var sPhase = (t * 0.8 + obj.seed + sp * 1.5) % 3.0;
+                        smoke.position.y = 1.4 + sPhase * 0.4;
+                        smoke.position.x = Math.sin(t * 2 + obj.seed + sp * 2.1) * 0.03;
+                        smoke.position.z = Math.cos(t * 1.5 + obj.seed + sp * 1.7) * 0.02;
+                        var smokeLife = sPhase / 3.0;
+                        smoke.material.opacity = 0.15 * (1.0 - smokeLife);
+                        smoke.scale.setScalar(0.8 + smokeLife * 1.5);
+                    }
                     break;
             }
         }

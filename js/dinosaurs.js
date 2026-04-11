@@ -3,6 +3,7 @@ window.DE = window.DE || {};
 DE.DinoManager = {
     dinos: [],
     floaters: [],
+    dyingDinos: [],
 
     spawnDino: function(typeName, scene) {
         var typeData = DE.DINO_TYPES[typeName];
@@ -725,9 +726,35 @@ DE.DinoManager = {
                     dino.bodyMesh.material.emissive = Math.sin(Date.now() * 0.02) > 0 ?
                         new THREE.Color(0xffff00) : new THREE.Color(0x000000);
                 }
+                // Create stun sparkle ring if not present
+                if (!dino.stunSparkle) {
+                    var sparkleGroup = new THREE.Group();
+                    var sparkMat = new THREE.MeshBasicMaterial({ color: 0xffff44, transparent: true, opacity: 0.8 });
+                    for (var ss = 0; ss < 5; ss++) {
+                        var star = new THREE.Mesh(new THREE.OctahedronGeometry(0.04, 0), sparkMat);
+                        sparkleGroup.add(star);
+                    }
+                    sparkleGroup.position.y = dino.type.scale * 2.8 + 0.5;
+                    dino.mesh.add(sparkleGroup);
+                    dino.stunSparkle = sparkleGroup;
+                }
+                // Animate stun sparkles orbiting the head
+                if (dino.stunSparkle) {
+                    dino.stunSparkle.visible = true;
+                    var sTime = Date.now() * 0.005;
+                    for (var si = 0; si < dino.stunSparkle.children.length; si++) {
+                        var sAngle = sTime + si * (Math.PI * 2 / 5);
+                        var sRad = dino.type.scale * 0.8;
+                        dino.stunSparkle.children[si].position.set(
+                            Math.cos(sAngle) * sRad, Math.sin(sTime * 2 + si) * 0.1, Math.sin(sAngle) * sRad);
+                        dino.stunSparkle.children[si].rotation.y = sTime * 3;
+                    }
+                }
             } else {
                 dino.currentSpeed = dino.speed;
                 if (dino.bodyMesh && dino.bodyMesh.material) dino.bodyMesh.material.emissive = new THREE.Color(0x000000);
+                // Hide stun sparkle when not stunned
+                if (dino.stunSparkle) dino.stunSparkle.visible = false;
             }
 
             if (dino.dotTimer > 0) {
@@ -770,6 +797,15 @@ DE.DinoManager = {
             dino.mesh.position.y = 0.1 + (dino.currentSpeed > 0 ? Math.abs(Math.sin(dino.animPhase)) * 0.08 : 0);
             if (dino.bodyMesh && dino.currentSpeed > 0) dino.bodyMesh.rotation.z = Math.sin(dino.animPhase * 0.8) * 0.03;
 
+            // Breathing idle animation when standing still
+            if (dino.bodyMesh && dino.currentSpeed === 0 && dino.stunTimer <= 0) {
+                var breathPhase = Date.now() * 0.002 + dino.animPhase;
+                var breathScale = 1.0 + Math.sin(breathPhase) * 0.015;
+                dino.bodyMesh.scale.set(breathScale, 1.0 + Math.sin(breathPhase) * 0.01, breathScale);
+            } else if (dino.bodyMesh && dino.currentSpeed > 0) {
+                dino.bodyMesh.scale.set(1, 1, 1);
+            }
+
             // Footstep dust puffs
             if (dino.currentSpeed > 0) {
                 dino.dustTimer = (dino.dustTimer || 0) - dt;
@@ -786,6 +822,36 @@ DE.DinoManager = {
             // Billboard health bar to always face camera
             if (dino.hpBar && DE.Renderer && DE.Renderer.camera) {
                 dino.hpBar.quaternion.copy(DE.Renderer.camera.quaternion);
+            }
+        }
+        // Animate dying dinos (fall over + fade out)
+        for (var di = this.dyingDinos.length - 1; di >= 0; di--) {
+            var dd = this.dyingDinos[di];
+            dd.timer += dt;
+            var progress = Math.min(dd.timer / dd.duration, 1.0);
+            // Fall over to one side
+            dd.mesh.rotation.z = dd.fallDir * progress * (Math.PI / 2);
+            dd.mesh.position.y = 0.1 * (1 - progress);
+            // Fade out all children
+            dd.mesh.traverse(function(child) {
+                if (child.material) {
+                    if (!child.material.transparent) { child.material.transparent = true; }
+                    child.material.opacity = 1.0 - progress;
+                }
+            });
+            // Flash red briefly at start
+            if (progress < 0.3) {
+                var flashIntensity = (1.0 - progress / 0.3) * 0.5;
+                dd.mesh.traverse(function(child) {
+                    if (child.material && child.material.emissive) {
+                        child.material.emissive.setHex(0xff0000);
+                        child.material.emissiveIntensity = flashIntensity;
+                    }
+                });
+            }
+            if (progress >= 1.0) {
+                if (dd.mesh.parent) dd.mesh.parent.remove(dd.mesh);
+                this.dyingDinos.splice(di, 1);
             }
         }
     },
@@ -809,7 +875,10 @@ DE.DinoManager = {
             this.spawnFloater(dino.x + 0.3, dino.type.scale * 3 + 1.5, dino.z, '+$' + dino.type.cash, 0xffdd44, scene);
             this.spawnFloater(dino.x - 0.3, dino.type.scale * 3 + 2, dino.z, '+' + dino.type.points, 0x44ff44, scene);
             this.deathEffect(dino, scene);
-            if (dino.mesh.parent) dino.mesh.parent.remove(dino.mesh);
+            // Dying animation: fall over + fade instead of instant removal
+            this.dyingDinos.push({ mesh: dino.mesh, timer: 0, duration: 0.8, fallDir: Math.random() < 0.5 ? 1 : -1 });
+            // Remove stun sparkle if present
+            if (dino.stunSparkle && dino.stunSparkle.parent) dino.stunSparkle.parent.remove(dino.stunSparkle);
         }
     },
 
@@ -900,6 +969,7 @@ DE.DinoManager = {
         gameState.escaped = (gameState.escaped || 0) + 1;
         DE.HUD.updateLives(gameState.lives, DE.CONFIG.MAX_LIVES);
         DE.Audio.playSound('escape');
+        if (dino.stunSparkle && dino.stunSparkle.parent) dino.stunSparkle.parent.remove(dino.stunSparkle);
         // Escape warning text
         this.spawnFloater(dino.x, 2, dino.z, 'ESCAPED!', 0xff0000, scene);
         // Red flash burst
@@ -936,6 +1006,10 @@ DE.DinoManager = {
         for (var i = 0; i < this.dinos.length; i++) {
             if (this.dinos[i].mesh && this.dinos[i].mesh.parent) this.dinos[i].mesh.parent.remove(this.dinos[i].mesh);
         }
+        for (var i = 0; i < this.dyingDinos.length; i++) {
+            if (this.dyingDinos[i].mesh && this.dyingDinos[i].mesh.parent) this.dyingDinos[i].mesh.parent.remove(this.dyingDinos[i].mesh);
+        }
         this.dinos = [];
+        this.dyingDinos = [];
     }
 };
