@@ -74,17 +74,17 @@ DE.Renderer = {
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        this.renderer.toneMappingExposure = 1.1;
+        this.renderer.toneMappingExposure = 0.85;
         this.renderer.outputEncoding = THREE.sRGBEncoding;
 
         // Atmospheric fog - layered depth
         this.scene.fog = new THREE.FogExp2(0x9ac8e8, 0.008);
 
         // Ambient fill - slightly warm
-        this.scene.add(new THREE.AmbientLight(0xffeedd, 0.35));
+        this.scene.add(new THREE.AmbientLight(0xffeedd, 0.28));
 
         // Main sun light - warm golden hour tone
-        var sun = new THREE.DirectionalLight(0xfff0c8, 1.1);
+        var sun = new THREE.DirectionalLight(0xfff0c8, 0.85);
         sun.position.set(20, 35, 15); sun.castShadow = true;
         sun.shadow.mapSize.width = 4096; sun.shadow.mapSize.height = 4096;
         sun.shadow.camera.near = 0.5; sun.shadow.camera.far = 100;
@@ -95,15 +95,15 @@ DE.Renderer = {
         this.scene.add(sun);
 
         // Hemisphere light - blue sky above, warm green ground bounce
-        this.scene.add(new THREE.HemisphereLight(0x88bbff, 0x446622, 0.4));
+        this.scene.add(new THREE.HemisphereLight(0x88bbff, 0x446622, 0.3));
 
         // Secondary fill light from opposite side (cool blue)
-        var fill = new THREE.DirectionalLight(0xaabbdd, 0.3);
+        var fill = new THREE.DirectionalLight(0xaabbdd, 0.22);
         fill.position.set(-15, 10, -10);
         this.scene.add(fill);
 
         // Rim/back light for silhouette separation
-        var rim = new THREE.DirectionalLight(0xffd4a0, 0.2);
+        var rim = new THREE.DirectionalLight(0xffd4a0, 0.15);
         rim.position.set(-10, 25, -20);
         this.scene.add(rim);
 
