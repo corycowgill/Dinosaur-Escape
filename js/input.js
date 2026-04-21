@@ -76,6 +76,12 @@ DE.Input = {
             if (e.key === '=' || e.key === '+') { DE.Renderer.setZoom(DE.Renderer.zoomLevel + 0.2); return; }
             if (e.key === '-' || e.key === '_') { DE.Renderer.setZoom(DE.Renderer.zoomLevel - 0.2); return; }
 
+            // Close settings panel first if open
+            if (e.key === 'Escape' && DE.HUD.settingsOpen) {
+                DE.HUD.toggleSettings();
+                return;
+            }
+
             // Pause
             if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
                 if (self.callbacks.onPause) self.callbacks.onPause();

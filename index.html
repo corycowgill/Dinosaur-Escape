@@ -179,6 +179,84 @@
         }
         #mobile-place-btn:active { background: rgba(0,255,0,0.6); }
 
+        /* Settings panel */
+        #settings-btn {
+            pointer-events: all; cursor: pointer;
+            font-size: 20px; opacity: 0.7; transition: opacity 0.2s;
+        }
+        #settings-btn:hover { opacity: 1; }
+        #settings-panel {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(10,10,10,0.95); border: 2px solid #555; border-radius: 12px;
+            padding: 0; z-index: 110; display: none; min-width: 320px; max-width: 90vw;
+            box-shadow: 0 0 40px rgba(0,0,0,0.8);
+        }
+        .settings-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 16px; border-bottom: 1px solid #333;
+        }
+        .settings-header span {
+            color: #4f4; font-size: 16px; font-weight: bold;
+            text-shadow: 0 0 8px rgba(0,255,100,0.3);
+        }
+        #settings-close {
+            background: none; border: none; color: #888; font-size: 22px;
+            cursor: pointer; padding: 0 4px; line-height: 1;
+        }
+        #settings-close:hover { color: #fff; }
+        .settings-body { padding: 12px 16px; }
+        .setting-row {
+            display: flex; align-items: center; gap: 10px;
+            margin-bottom: 10px;
+        }
+        .setting-row label {
+            color: #aaa; font-size: 12px; min-width: 80px; text-align: right;
+        }
+        .setting-row input[type="range"] {
+            flex: 1; height: 4px; -webkit-appearance: none; appearance: none;
+            background: #333; border-radius: 2px; outline: none;
+        }
+        .setting-row input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 14px; height: 14px;
+            background: #4f4; border-radius: 50%; cursor: pointer;
+            border: 2px solid #2a2a2a;
+        }
+        .setting-row input[type="range"]::-moz-range-thumb {
+            width: 14px; height: 14px; background: #4f4; border-radius: 50%;
+            cursor: pointer; border: 2px solid #2a2a2a;
+        }
+        .setting-row .set-val {
+            color: #fd4; font-size: 11px; min-width: 36px; text-align: right;
+        }
+        .setting-row .toggle-wrap {
+            display: flex; align-items: center; gap: 6px; flex: 1;
+        }
+        .toggle-switch {
+            position: relative; width: 36px; height: 20px; cursor: pointer;
+        }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-track {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: #333; border-radius: 10px; transition: background 0.2s;
+        }
+        .toggle-switch input:checked + .toggle-track { background: #4f4; }
+        .toggle-track::after {
+            content: ''; position: absolute; width: 16px; height: 16px;
+            left: 2px; top: 2px; background: #fff; border-radius: 50%;
+            transition: transform 0.2s;
+        }
+        .toggle-switch input:checked + .toggle-track::after { transform: translateX(16px); }
+        .toggle-label { color: #ccc; font-size: 12px; }
+        .settings-footer {
+            padding: 8px 16px 14px; text-align: center;
+        }
+        #settings-reset {
+            padding: 6px 20px; font-size: 12px; border: 1px solid #555;
+            border-radius: 6px; background: rgba(50,50,50,0.8); color: #aaa;
+            cursor: pointer; transition: all 0.2s;
+        }
+        #settings-reset:hover { border-color: #f84; color: #f84; }
+
         @media (max-width: 600px) {
             .hud-item { font-size: 13px; }
             #hud { padding: 6px 10px; }
@@ -202,6 +280,7 @@
         <div class="hud-item" style="pointer-events:all;cursor:pointer;" onclick="DE.Game.cycleSpeed(1)" title="Click to change speed">
             Speed: <span id="speed-display" style="color:#fd4;">1x</span>
         </div>
+        <div class="hud-item" id="settings-btn" onclick="DE.HUD.toggleSettings()" title="Graphics Settings">&#9881;</div>
     </div>
 
     <div id="trap-bar" style="display:none;"></div>
@@ -213,6 +292,7 @@
         <h1>PAUSED</h1>
         <div class="pause-info">Press ESC or P to resume</div>
         <button class="btn" id="resume-btn">RESUME</button>
+        <button class="btn" style="padding:10px 24px;font-size:14px;border-color:#888;color:#aaa;background:rgba(40,40,40,0.6);" onclick="DE.HUD.toggleSettings()">&#9881; Settings</button>
     </div>
 
     <!-- Mobile D-pad for cursor movement -->
@@ -224,10 +304,62 @@
     </div>
     <button id="mobile-place-btn" style="display:none;">PLACE</button>
 
+    <div id="settings-panel">
+        <div class="settings-header">
+            <span>Graphics Settings</span>
+            <button id="settings-close" onclick="DE.HUD.toggleSettings()">&times;</button>
+        </div>
+        <div class="settings-body">
+            <div class="setting-row">
+                <label>Brightness</label>
+                <input type="range" id="set-brightness" min="40" max="150" value="85" step="5">
+                <span class="set-val" id="set-brightness-val">85%</span>
+            </div>
+            <div class="setting-row">
+                <label>Contrast</label>
+                <input type="range" id="set-contrast" min="60" max="160" value="100" step="5">
+                <span class="set-val" id="set-contrast-val">100%</span>
+            </div>
+            <div class="setting-row">
+                <label>Saturation</label>
+                <input type="range" id="set-saturation" min="0" max="200" value="100" step="5">
+                <span class="set-val" id="set-saturation-val">100%</span>
+            </div>
+            <div class="setting-row">
+                <label>Fog</label>
+                <input type="range" id="set-fog" min="0" max="25" value="8" step="1">
+                <span class="set-val" id="set-fog-val">8</span>
+            </div>
+            <div class="setting-row">
+                <label>Volume</label>
+                <input type="range" id="set-volume" min="0" max="100" value="50" step="5">
+                <span class="set-val" id="set-volume-val">50%</span>
+            </div>
+            <div class="setting-row">
+                <label>Shadows</label>
+                <div class="toggle-wrap">
+                    <label class="toggle-switch"><input type="checkbox" id="set-shadows" checked><span class="toggle-track"></span></label>
+                    <span class="toggle-label">Enabled</span>
+                </div>
+            </div>
+            <div class="setting-row">
+                <label>Particles</label>
+                <div class="toggle-wrap">
+                    <label class="toggle-switch"><input type="checkbox" id="set-particles" checked><span class="toggle-track"></span></label>
+                    <span class="toggle-label">Enabled</span>
+                </div>
+            </div>
+        </div>
+        <div class="settings-footer">
+            <button id="settings-reset" onclick="DE.HUD.resetSettings()">Reset Defaults</button>
+        </div>
+    </div>
+
     <div id="start-screen">
         <h1>DINOSAUR ESCAPE</h1>
         <div class="subtitle">Stop the dinos before they break free!</div>
         <button class="btn" id="start-btn">START GAME</button>
+        <button class="btn" style="padding:10px 24px;font-size:14px;border-color:#888;color:#aaa;background:rgba(40,40,40,0.6);" onclick="DE.HUD.toggleSettings()">&#9881; Settings</button>
         <div class="controls-info">
             <b>Mouse:</b> Click place | Right-click sell | Shift+Scroll zoom | Scroll traps<br>
             <b>Touch:</b> Tap to place | Long-press sell | Pinch to zoom<br>

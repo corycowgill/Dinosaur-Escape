@@ -80,6 +80,86 @@ DE.HUD = {
         for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('selected', i === index);
     },
 
+    settingsOpen: false,
+    graphicsSettings: null,
+
+    initSettings: function() {
+        var defaults = DE.Renderer.graphicsDefaults;
+        var saved = null;
+        try { saved = JSON.parse(localStorage.getItem('de_graphics')); } catch (e) {}
+        this.graphicsSettings = {};
+        for (var key in defaults) this.graphicsSettings[key] = (saved && saved[key] !== undefined) ? saved[key] : defaults[key];
+        this.syncSettingsUI();
+        DE.Renderer.applyGraphicsSettings(this.graphicsSettings);
+
+        var self = this;
+        var sliders = ['brightness', 'contrast', 'saturation', 'fog', 'volume'];
+        for (var i = 0; i < sliders.length; i++) {
+            (function(name) {
+                var el = document.getElementById('set-' + name);
+                if (!el) return;
+                el.addEventListener('input', function() {
+                    self.graphicsSettings[name] = parseInt(el.value);
+                    document.getElementById('set-' + name + '-val').textContent = el.value + (name === 'fog' ? '' : '%');
+                    DE.Renderer.applyGraphicsSettings(self.graphicsSettings);
+                    self.saveSettings();
+                });
+            })(sliders[i]);
+        }
+        var toggles = ['shadows', 'particles'];
+        for (var i = 0; i < toggles.length; i++) {
+            (function(name) {
+                var el = document.getElementById('set-' + name);
+                if (!el) return;
+                el.addEventListener('change', function() {
+                    self.graphicsSettings[name] = el.checked;
+                    el.parentElement.nextElementSibling.textContent = el.checked ? 'Enabled' : 'Disabled';
+                    DE.Renderer.applyGraphicsSettings(self.graphicsSettings);
+                    self.saveSettings();
+                });
+            })(toggles[i]);
+        }
+    },
+
+    syncSettingsUI: function() {
+        var s = this.graphicsSettings;
+        var sliders = ['brightness', 'contrast', 'saturation', 'fog', 'volume'];
+        for (var i = 0; i < sliders.length; i++) {
+            var name = sliders[i];
+            var el = document.getElementById('set-' + name);
+            if (el) {
+                el.value = s[name];
+                document.getElementById('set-' + name + '-val').textContent = s[name] + (name === 'fog' ? '' : '%');
+            }
+        }
+        var toggles = ['shadows', 'particles'];
+        for (var i = 0; i < toggles.length; i++) {
+            var name = toggles[i];
+            var el = document.getElementById('set-' + name);
+            if (el) {
+                el.checked = s[name];
+                el.parentElement.nextElementSibling.textContent = s[name] ? 'Enabled' : 'Disabled';
+            }
+        }
+    },
+
+    saveSettings: function() {
+        try { localStorage.setItem('de_graphics', JSON.stringify(this.graphicsSettings)); } catch (e) {}
+    },
+
+    toggleSettings: function() {
+        this.settingsOpen = !this.settingsOpen;
+        document.getElementById('settings-panel').style.display = this.settingsOpen ? 'block' : 'none';
+    },
+
+    resetSettings: function() {
+        var defaults = DE.Renderer.graphicsDefaults;
+        for (var key in defaults) this.graphicsSettings[key] = defaults[key];
+        this.syncSettingsUI();
+        DE.Renderer.applyGraphicsSettings(this.graphicsSettings);
+        this.saveSettings();
+    },
+
     buildTrapBar: function() {
         var bar = document.getElementById('trap-bar');
         bar.innerHTML = '';

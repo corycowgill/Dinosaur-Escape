@@ -14,6 +14,7 @@ DE.Game = {
         DE.Map.buildLayout();
         DE.Map.createScene(DE.Renderer.scene);
         DE.HUD.buildTrapBar();
+        DE.HUD.initSettings();
 
         // Create reusable range preview ring
         this.rangeRing = new THREE.Mesh(

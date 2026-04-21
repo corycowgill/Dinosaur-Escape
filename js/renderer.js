@@ -211,6 +211,24 @@ DE.Renderer = {
         this.renderer.render(this.scene, this.camera);
     },
 
+    graphicsDefaults: { brightness: 85, contrast: 100, saturation: 100, fog: 8, volume: 50, shadows: true, particles: true },
+
+    applyGraphicsSettings: function(settings) {
+        this.renderer.toneMappingExposure = settings.brightness / 100;
+
+        var canvas = this.renderer.domElement;
+        canvas.style.filter = 'contrast(' + (settings.contrast / 100) + ') saturate(' + (settings.saturation / 100) + ')';
+
+        if (this.scene.fog) this.scene.fog.density = settings.fog / 1000;
+
+        this.renderer.shadowMap.enabled = settings.shadows;
+        if (this.dustParticles) this.dustParticles.visible = settings.particles;
+        for (var ci = 0; ci < this.clouds.length; ci++) this.clouds[ci].group.visible = settings.particles;
+        for (var si = 0; si < this.lightShafts.length; si++) this.lightShafts[si].mesh.visible = settings.particles;
+
+        if (DE.Audio && DE.Audio.masterGain) DE.Audio.masterGain.gain.value = settings.volume / 100;
+    },
+
     screenToWorld: function(screenX, screenY) {
         var rc = new THREE.Raycaster();
         var m = new THREE.Vector2((screenX / window.innerWidth) * 2 - 1, -(screenY / window.innerHeight) * 2 + 1);
